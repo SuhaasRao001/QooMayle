@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuMail — Quantum Secure Email</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #1a1d27; --bg3: #22263a;
+    --border: #2e3348; --text: #e8eaf0; --muted: #7b82a0;
+    --accent: #6c63ff; --accent2: #4ecdc4;
+    --l1: #a855f7; --l2: #3b82f6; --l3: #f59e0b; --l4: #6b7280;
+    --success: #22c55e; --danger: #ef4444; --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+  
+  /* ── Top bar ── */
+  header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 20px; height: 52px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  .logo { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+  .logo span { color: var(--accent2); }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .km-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600; background: #1e3a2a; color: var(--success); border: 1px solid #22c55e44; }
+  .km-badge.warn { background: #3a2e1e; color: var(--warn); border-color: #f59e0b44; }
+  .km-badge.err { background: #3a1e1e; color: var(--danger); border-color: #ef444444; }
+  .btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity .15s; }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-danger { background: var(--danger); color: #fff; }
+
+  /* ── Layout ── */
+  .app { display: flex; flex: 1; overflow: hidden; }
+  
+  /* ── Sidebar ── */
+  aside { width: 220px; background: var(--bg2); border-right: 1px solid var(--border); padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .nav-btn { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; font-size: 14px; color: var(--muted); border: none; background: none; width: 100%; text-align: left; transition: all .15s; }
+  .nav-btn:hover, .nav-btn.active { background: var(--bg3); color: var(--text); }
+  .nav-btn.active { border-left: 3px solid var(--accent); padding-left: 17px; }
+  .nav-icon { font-size: 16px; width: 18px; }
+  .compose-btn { margin: 16px; }
+  .sidebar-bottom { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); }
+  .user-info { font-size: 12px; color: var(--muted); word-break: break-all; }
+
+  /* ── Main content ── */
+  main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Login screen ── */
+  #login-screen { display: flex; align-items: center; justify-content: center; height: 100%; background: var(--bg); }
+  .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 36px; width: 420px; }
+  .login-card h2 { font-size: 22px; margin-bottom: 6px; }
+  .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+  input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 14px; outline: none; transition: border-color .15s; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .error-msg { background: #3a1e1e; border: 1px solid #ef444433; color: var(--danger); padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; display: none; }
+
+  /* ── Inbox panel ── */
+  #inbox-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .panel-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .panel-header h3 { font-size: 16px; font-weight: 600; }
+  .email-list { overflow-y: auto; flex: 1; }
+  .email-row { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: flex-start; transition: background .1s; }
+  .email-row:hover { background: var(--bg2); }
+  .email-row.selected { background: var(--bg3); border-left: 3px solid var(--accent); padding-left: 17px; }
+  .email-meta { flex: 1; min-width: 0; }
+  .email-from { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .email-subj { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .email-date { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+  .sec-pill { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; flex-shrink: 0; }
+  .sec-1 { background: #3b1f5e; color: var(--l1); }
+  .sec-2 { background: #1e2f5e; color: var(--l2); }
+  .sec-3 { background: #3a2e0e; color: var(--l3); }
+  .sec-4 { background: #222; color: var(--l4); }
+
+  /* ── Email detail ── */
+  #detail-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; border-left: 1px solid var(--border); }
+  .detail-header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .detail-subject { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .detail-meta { font-size: 12px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+  .detail-body { padding: 20px; overflow-y: auto; flex: 1; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+  .decrypt-bar { padding: 12px 20px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .decrypt-status { font-size: 12px; padding: 4px 10px; border-radius: 6px; }
+  .decrypt-status.ok { background: #1e3a2a; color: var(--success); }
+  .decrypt-status.fail { background: #3a1e1e; color: var(--danger); }
+  .decrypt-status.plain { background: #222; color: var(--muted); }
+
+  /* ── Compose ── */
+  #compose-panel { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+  .compose-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; max-width: 680px; }
+  .compose-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 600; }
+  .compose-body { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .security-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sec-opt { padding: 10px 12px; border-radius: 8px; border: 2px solid var(--border); cursor: pointer; transition: all .15s; }
+  .sec-opt:hover { border-color: var(--accent); }
+  .sec-opt.selected { border-color: var(--accent); background: var(--bg3); }
+  .sec-opt-title { font-size: 13px; font-weight: 600; }
+  .sec-opt-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .compose-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .send-result { font-size: 12px; padding: 8px 12px; border-radius: 6px; }
+  .send-result.ok { background: #1e3a2a; color: var(--success); }
+  .send-result.fail { background: #3a1e1e; color: var(--danger); }
+
+  /* ── KM Panel ── */
+  #km-panel { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+  .km-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; max-width: 600px; }
+  .km-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+  .key-pool-bar { background: var(--bg3); border-radius: 4px; height: 8px; margin: 8px 0; overflow: hidden; }
+  .key-pool-fill { height: 100%; border-radius: 4px; background: var(--success); transition: width .4s; }
+  .key-pool-fill.warn { background: var(--warn); }
+  .key-pool-fill.crit { background: var(--danger); }
+  .stat-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 4px 0; }
+  .stat-val { color: var(--text); font-weight: 500; }
+  .demo-box { background: var(--bg3); border-radius: 8px; padding: 14px; margin-top: 12px; }
+  .demo-box pre { font-size: 11px; color: var(--accent2); overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-family: 'Courier New', monospace; }
+
+  /* ── Spinner ── */
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 20px; }
+
+  select option { background: var(--bg2); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     LOGIN SCREEN
+═══════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <h2>🔐 QuMail</h2>
+    <p>Quantum Secure Email Client &mdash; ETSI QKD 014</p>
+    
+    <div class="error-msg" id="login-error"></div>
+
+    <div class="form-group">
+      <label>Email address</label>
+      <input type="email" id="login-email" placeholder="you@gmail.com" value="">
+    </div>
+    <div class="form-group">
+      <label>App password</label>
+      <input type="password" id="login-pass" placeholder="Gmail App Password">
+      <div class="hint">Gmail: Settings → Security → App Passwords</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="form-group">
+      <label>Your SAE ID (KM identity)</label>
+      <input type="text" id="login-sae" placeholder="e.g. alice@qkd" value="alice@qkd">
+    </div>
+    <div class="form-group">
+      <label>Peer SAE ID</label>
+      <input type="text" id="login-peer-sae" placeholder="e.g. bob@qkd" value="bob@qkd">
+      <div class="hint">Must match recipient's SAE ID in their QuMail</div>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;padding:10px;font-size:15px;margin-top:8px" onclick="doLogin()">
+      Connect &amp; Open Inbox
+    </button>
+
+    <div class="divider"></div>
+    <div style="font-size:11px;color:var(--muted);text-align:center">
+      Demo mode: KM simulator runs on same server. No real QKD hardware needed.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN APP (hidden until login)
+═══════════════════════════════════════════════ -->
+<header id="app-header" style="display:none">
+  <div class="logo">Qu<span>Mail</span></div>
+  <div class="header-right">
+    <span id="km-status-badge" class="km-badge">KM: checking...</span>
+    <span id="header-user" style="font-size:13px;color:var(--muted)"></span>
+    <button class="btn btn-outline btn-sm" onclick="doLogout()">Logout</button>
+  </div>
+</header>
+
+<div class="app" id="main-app" style="display:none">
+
+  <!-- Sidebar -->
+  <aside>
+    <button class="btn btn-primary compose-btn" onclick="showPanel('compose')">✏️ Compose</button>
+    <button class="nav-btn active" id="nav-inbox" onclick="showPanel('inbox')">
+      <span class="nav-icon">📥</span> Inbox
+    </button>
+    <button class="nav-btn" id="nav-km" onclick="showPanel('km')">
+      <span class="nav-icon">🔑</span> Key Manager
+    </button>
+    <div class="sidebar-bottom">
+      <div class="user-info" id="sidebar-user"></div>
+    </div>
+  </aside>
+
+  <main>
+
+    <!-- INBOX panel -->
+    <div id="inbox-panel" style="display:flex;flex:1;overflow:hidden">
+      <div style="width:340px;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0">
+        <div class="panel-header">
+          <h3>Inbox</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadInbox()" style="margin-left:auto">↻ Refresh</button>
+        </div>
+        <div class="email-list" id="email-list">
+          <div class="loading"><span class="spin"></span> Loading emails...</div>
+        </div>
+      </div>
+      <div id="detail-panel" style="flex:1;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px">
+          Select an email to read
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPOSE panel -->
+    <div id="compose-panel">
+      <div class="compose-card">
+        <div class="compose-header">New Message</div>
+        <div class="compose-body">
+          <div class="form-group">
+            <label>To</label>
+            <input type="email" id="compose-to" placeholder="recipient@gmail.com">
+          </div>
+          <div class="form-group">
+            <label>Recipient SAE ID</label>
+            <input type="text" id="compose-peer-sae" placeholder="bob@qkd">
+          </div>
+          <div class="form-group">
+            <label>Subject</label>
+            <input type="text" id="compose-subject" placeholder="Subject">
+          </div>
+          <div class="form-group">
+            <label>Security Level</label>
+            <div class="security-selector">
+              <div class="sec-opt selected" data-level="1" onclick="selectLevel(1)">
+                <div class="sec-opt-title" style="color:var(--l1)">🔮 Level 1 — OTP</div>
+                <div class="sec-opt-desc">Quantum Secure · One-Time Pad · Unconditional</div>
+              </div>
+              <div class="sec-opt" data-level="2" onclick="selectLevel(2)">
+                <div class="sec-opt-title" style="color:var(--l2)">⚛️ Level 2 — Q-AES</div>
+                <div class="sec-opt-desc">Quantum-seeded AES-256-GCM · Large files OK</div>
+              </div>
+              <div class="sec-opt" data-level="3" onclick="selectLevel(3)">
+                <div class="sec-opt-title" style="color:var(--l3)">🔒 Level 3 — AES</div>
+                <div class="sec-opt-desc">Standard AES-256-GCM · No quantum key needed</div>
+              </div>
+              <div class="sec-opt" data-level="4" onclick="selectLevel(4)">
+                <div class="sec-opt-title" style="color:var(--l4)">📭 Level 4 — Plain</div>
+                <div class="sec-opt-desc">No encryption · Baseline comparison</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Message</label>
+            <textarea id="compose-body" rows="8" placeholder="Write your message here..."></textarea>
+          </div>
+        </div>
+        <div class="compose-footer">
+          <button class="btn btn-primary" onclick="sendEmail()">Send Secure</button>
+          <button class="btn btn-outline btn-sm" onclick="previewEncryption()">Preview encryption</button>
+          <div id="send-result"></div>
+        </div>
+      </div>
+      <!-- Encryption preview -->
+      <div id="enc-preview" style="display:none;margin-top:16px;max-width:680px">
+        <div class="km-card">
+          <h4>Encryption preview — what the wire sees</h4>
+          <div class="demo-box"><pre id="enc-preview-text"></pre></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KM PANEL -->
+    <div id="km-panel">
+      <div style="max-width:600px">
+        <h3 style="font-size:18px;font-weight:600;margin-bottom:20px">Key Manager — ETSI QKD 014 Simulator</h3>
+
+        <div class="km-card">
+          <h4>Key Pool Status</h4>
+          <div id="km-pool-info">
+            <div class="loading"><span class="spin"></span> Fetching status...</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-outline btn-sm" onclick="loadKMStatus()">↻ Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="refillKeys()">Refill Pool (new QKD session)</button>
+          </div>
+        </div>
+
+        <div class="km-card">
+          <h4>Live Encryption Demo</h4>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            Type a message and see exactly what an attacker on the wire would intercept.
+          </p>
+          <div class="form-group">
+            <label>Plaintext</label>
+            <input type="text" id="demo-text" value="Top secret: meet at midnight" placeholder="Enter message">
+          </div>
+          <div class="form-group">
+            <label>Level</label>
+            <select id="demo-level">
+              <option value="1">Level 1 — OTP (Quantum Secure)</option>
+              <option value="2" selected>Level 2 — Quantum-seeded AES</option>
+              <option value="3">Level 3 — AES-256-GCM</option>
+              <option value="4">Level 4 — No encryption</option>
+            </select>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="runLiveDemo()">Encrypt &amp; show wire payload</button>
+          <div id="live-demo-result" style="margin-top:10px"></div>
+        </div>
+
+        <div class="km-card">
+          <h4>About the Key Manager</h4>
+          <p style="font-size:13px;color:var(--muted);line-height:1.6">
+            This simulator implements the <strong style="color:var(--text)">ETSI GS QKD 014</strong> REST API. 
+            Each Alice–Bob pair shares a pre-generated pool of <strong style="color:var(--text)">256-bit symmetric keys</strong>. 
+            In production, this module is swapped for a real QKD network — the application interface is identical.
+            Key IDs are embedded in <code style="color:var(--accent2)">X-QKD-KeyID</code> email headers; the key material never leaves the KM.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const S = {
+  email: '', password: '', saeId: '', peerSaeId: '',
+  emails: [], selectedEmail: null, selectedLevel: 1,
+};
+
+// ═══════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const sae = document.getElementById('login-sae').value.trim();
+  const peer = document.getElementById('login-peer-sae').value.trim();
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+
+  if (!email || !pass || !sae) {
+    err.textContent = 'Email, password, and SAE ID are required.';
+    err.style.display = 'block';
+    return;
+  }
+
+  S.email = email; S.password = pass; S.saeId = sae; S.peerSaeId = peer;
+  document.getElementById('header-user').textContent = email;
+  document.getElementById('sidebar-user').textContent = `${email}\nSAE: ${sae}`;
+  document.getElementById('compose-peer-sae').value = peer;
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-header').style.display = '';
+  document.getElementById('main-app').style.display = '';
+
+  showPanel('inbox');
+  loadInbox();
+  pollKMStatus();
+}
+
+function doLogout() {
+  Object.assign(S, { email:'', password:'', saeId:'', peerSaeId:'', emails:[], selectedEmail:null });
+  document.getElementById('login-screen').style.display = '';
+  document.getElementById('app-header').style.display = 'none';
+  document.getElementById('main-app').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════
+// PANELS
+// ═══════════════════════════════════════════════
+function showPanel(name) {
+  ['inbox','compose','km'].forEach(p => {
+    document.getElementById(p+'-panel').style.display = 'none';
+    document.getElementById('nav-'+p) && (document.getElementById('nav-'+p).className = 'nav-btn');
+  });
+  document.getElementById(name+'-panel').style.display = 'flex';
+  if(document.getElementById('nav-'+name))
+    document.getElementById('nav-'+name).className = 'nav-btn active';
+  if(name === 'km') { loadKMStatus(); }
+}
+
+// ═══════════════════════════════════════════════
+// INBOX
+// ═══════════════════════════════════════════════
+async function loadInbox() {
+  document.getElementById('email-list').innerHTML = '<div class="loading"><span class="spin"></span> Fetching emails...</div>';
+  try {
+    const r = await api('/api/email/fetch', 'POST', { email: S.email, password: S.password, limit: 20 });
+    S.emails = r.emails || [];
+    renderEmailList();
+  } catch(e) {
+    document.getElementById('email-list').innerHTML = `<div style="padding:20px;color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+function renderEmailList() {
+  const list = document.getElementById('email-list');
+  if (!S.emails.length) { list.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">No emails found</div>'; return; }
+  if (S.emails[0]?.error) { list.innerHTML = `<div style="padding:20px;color:var(--danger);font-size:13px">IMAP error: ${S.emails[0].error}</div>`; return; }
+
+  list.innerHTML = S.emails.map((em, i) => {
+    const lvl = em.qkd_level || 4;
+    const pill = em.is_qumail ? `<span class="sec-pill sec-${lvl}">L${lvl}</span>` : '';
+    const from = em.from.replace(/<.*>/, '').trim() || em.from;
+    return `<div class="email-row" onclick="openEmail(${i})">
+      <div class="email-meta">
+        <div class="email-from">${esc(from)}</div>
+        <div class="email-subj">${esc(em.subject)}</div>
+      </div>
+      ${pill}
+      <div class="email-date">${formatDate(em.date)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function openEmail(idx) {
+  S.selectedEmail = idx;
+  document.querySelectorAll('.email-row').forEach((r,i) => r.className = 'email-row' + (i===idx?' selected':''));
+  const em = S.emails[idx];
+  const detail = document.getElementById('detail-panel');
+  
+  const lvlNames = {1:'OTP — Quantum Secure',2:'Quantum-seeded AES',3:'AES-256-GCM',4:'No encryption'};
+  
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-subject">${esc(em.subject)}</div>
+      <div class="detail-meta">
+        <span>From: ${esc(em.from)}</span>
+        <span>Date: ${esc(em.date)}</span>
+        ${em.is_qumail ? `<span style="color:var(--accent)">QuMail — Level ${em.qkd_level}: ${lvlNames[em.qkd_level]||''}</span>` : '<span style="color:var(--muted)">Standard email</span>'}
+      </div>
+    </div>
+    <div class="detail-body" id="email-body">${esc(em.body)}</div>
+    <div class="decrypt-bar">
+      ${em.is_qumail ? `<button class="btn btn-primary btn-sm" onclick="decryptCurrent()">🔓 Decrypt</button>` : '<span style="font-size:12px;color:var(--muted)">Not a QuMail message</span>'}
+      <div id="decrypt-status"></div>
+    </div>`;
+}
+
+async function decryptCurrent() {
+  const em = S.emails[S.selectedEmail];
+  const status = document.getElementById('decrypt-status');
+  status.innerHTML = '<span class="spin"></span>';
+  try {
+    const r = await api('/api/email/decrypt', 'POST', {
+      encrypted_body: em.body,
+      qkd_key_id: em.qkd_key_id,
+      qkd_level: em.qkd_level,
+      qkd_sender_sae: em.qkd_sender_sae,
+      recipient_email: S.email,
+      recipient_password: S.password,
+      recipient_sae_id: S.saeId,
+    });
+    document.getElementById('email-body').textContent = r.plaintext;
+    status.innerHTML = `<span class="decrypt-status ok">✓ Decrypted — Level ${r.level}</span>`;
+  } catch(e) {
+    status.innerHTML = `<span class="decrypt-status fail">✗ ${e.message}</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// COMPOSE
+// ═══════════════════════════════════════════════
+function selectLevel(n) {
+  S.selectedLevel = n;
+  document.querySelectorAll('.sec-opt').forEach(el => {
+    el.className = 'sec-opt' + (parseInt(el.dataset.level) === n ? ' selected' : '');
+  });
+  document.getElementById('enc-preview').style.display = 'none';
+}
+
+async function sendEmail() {
+  const to = document.getElementById('compose-to').value.trim();
+  const peerSae = document.getElementById('compose-peer-sae').value.trim();
+  const subject = document.getElementById('compose-subject').value.trim();
+  const body = document.getElementById('compose-body').value;
+  const result = document.getElementById('send-result');
+
+  if (!to || !body) { result.innerHTML = '<span class="send-result fail">To and message body are required.</span>'; return; }
+
+  result.innerHTML = '<span class="spin"></span>';
+  try {
+    const r = await api('/api/email/send', 'POST', {
+      sender_email: S.email, sender_password: S.password,
+      sender_sae_id: S.saeId, recipient_email: to,
+      recipient_sae_id: peerSae || S.peerSaeId,
+      subject, body, level: S.selectedLevel,
+    });
+    result.innerHTML = `<span class="send-result ok">✓ Sent — Level ${r.level_used} | Key: ${r.key_id ? r.key_id.substring(0,8)+'...' : 'none'}</span>`;
+    setTimeout(() => { document.getElementById('compose-body').value = ''; result.innerHTML = ''; }, 4000);
+  } catch(e) {
+    result.innerHTML = `<span class="send-result fail">✗ ${e.message}</span>`;
+  }
+}
+
+async function previewEncryption() {
+  const body = document.getElementById('compose-body').value || 'Hello, this is a secret message.';
+  const peerSae = document.getElementById('compose-peer-sae').value.trim() || S.peerSaeId;
+  try {
+    const r = await fetch(`/api/demo/encrypt_preview?text=${encodeURIComponent(body)}&level=${S.selectedLevel}&master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(peerSae)}`);
+    const d = await r.json();
+    document.getElementById('enc-preview-text').textContent =
+      `Original: ${d.original}\n\nWire payload (what attacker sees):\n${d.encrypted}\n\nLevel: ${d.level_name}\nKey ID: ${d.key_id || 'N/A'}`;
+    document.getElementById('enc-preview').style.display = 'block';
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
+// KEY MANAGER
+// ═══════════════════════════════════════════════
+async function loadKMStatus() {
+  const el = document.getElementById('km-pool-info');
+  el.innerHTML = '<div class="loading"><span class="spin"></span></div>';
+  try {
+    const r = await fetch(`/api/km/status?master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`);
+    const d = await r.json();
+    const pct = Math.round((d.stored_key_count / d.max_key_count) * 100);
+    const barClass = pct > 40 ? '' : pct > 15 ? 'warn' : 'crit';
+    el.innerHTML = `
+      <div class="stat-row"><span>Status</span><span class="stat-val">${d.status}</span></div>
+      <div class="stat-row"><span>Available keys</span><span class="stat-val">${d.stored_key_count} / ${d.max_key_count}</span></div>
+      <div class="key-pool-bar"><div class="key-pool-fill ${barClass}" style="width:${pct}%"></div></div>
+      <div class="stat-row"><span>Key size</span><span class="stat-val">${d.key_size} bits</span></div>
+      <div class="stat-row"><span>Used keys</span><span class="stat-val">${d.used_key_count}</span></div>
+      <div class="stat-row"><span>Source KME</span><span class="stat-val">${d.source_KME_ID}</span></div>
+    `;
+    updateKMBadge(d.status);
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+async function refillKeys() {
+  await fetch(`/api/km/refill?master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`, {method:'POST'});
+  await loadKMStatus();
+}
+
+async function runLiveDemo() {
+  const text = document.getElementById('demo-text').value;
+  const level = document.getElementById('demo-level').value;
+  const el = document.getElementById('live-demo-result');
+  el.innerHTML = '<span class="spin"></span>';
+  try {
+    const r = await fetch(`/api/demo/encrypt_preview?text=${encodeURIComponent(text)}&level=${level}&master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`);
+    const d = await r.json();
+    el.innerHTML = `<div class="demo-box"><pre>${esc(d.encrypted)}</pre></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">Level: ${esc(d.level_name)} | Key ID: ${d.key_id || 'N/A'}</div>`;
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
+  }
+}
+
+async function pollKMStatus() {
+  if (!S.saeId) return;
+  try {
+    const r = await fetch(`/api/km/status?master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`);
+    const d = await r.json();
+    updateKMBadge(d.status);
+  } catch(e) {}
+  setTimeout(pollKMStatus, 15000);
+}
+
+function updateKMBadge(status) {
+  const b = document.getElementById('km-status-badge');
+  b.textContent = `KM: ${status}`;
+  b.className = 'km-badge' + (status==='ACTIVE'?'': status==='LOW'?' warn':' err');
+}
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+async function api(path, method, body) {
+  const r = await fetch(path, {
+    method, headers: {'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
+  return d;
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  try { return new Date(d).toLocaleDateString(); } catch(e) { return d.substring(0,10); }
+}
+</script>
+</body>
+</html>
