@@ -202,7 +202,7 @@
   <main>
 
     <!-- INBOX panel -->
-    <div id="inbox-panel" style="display:flex;flex:1;overflow:hidden">
+    <div id="inbox-panel">
       <div style="width:340px;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0">
         <div class="panel-header">
           <h3>Inbox</h3>
@@ -212,7 +212,7 @@
           <div class="loading"><span class="spin"></span> Loading emails...</div>
         </div>
       </div>
-      <div id="detail-panel" style="flex:1;display:flex;flex-direction:column;min-width:0;">
+      <div id="detail-panel">
         <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px">
           Select an email to read
         </div>
@@ -382,15 +382,28 @@ function doLogout() {
 // ═══════════════════════════════════════════════
 function showPanel(name) {
   ['inbox','compose','km'].forEach(p => {
-    document.getElementById(p+'-panel').style.display = 'none';
-    document.getElementById('nav-'+p) && (document.getElementById('nav-'+p).className = 'nav-btn');
-  });
-  document.getElementById(name+'-panel').style.display = 'flex';
-  if(document.getElementById('nav-'+name))
-    document.getElementById('nav-'+name).className = 'nav-btn active';
-  if(name === 'km') { loadKMStatus(); }
-}
+    const el = document.getElementById(p + '-panel');
+    if (!el) return;
 
+    el.style.display = 'none';
+
+    const nav = document.getElementById('nav-' + p);
+    if (nav) nav.className = 'nav-btn';
+  });
+
+  const active = document.getElementById(name + '-panel');
+
+  if (name === 'inbox') {
+    active.style.display = 'flex';
+  } else {
+    active.style.display = 'block';
+  }
+
+  const navActive = document.getElementById('nav-' + name);
+  if (navActive) navActive.className = 'nav-btn active';
+
+  if (name === 'km') loadKMStatus();
+}
 // ═══════════════════════════════════════════════
 // INBOX
 // ═══════════════════════════════════════════════
@@ -427,26 +440,47 @@ function renderEmailList() {
 
 async function openEmail(idx) {
   S.selectedEmail = idx;
-  document.querySelectorAll('.email-row').forEach((r,i) => r.className = 'email-row' + (i===idx?' selected':''));
+
+  document.querySelectorAll('.email-row').forEach((r,i) => {
+    r.className = 'email-row' + (i === idx ? ' selected' : '');
+  });
+
   const em = S.emails[idx];
   const detail = document.getElementById('detail-panel');
-  
-  const lvlNames = {1:'OTP — Quantum Secure',2:'Quantum-seeded AES',3:'AES-256-GCM',4:'No encryption'};
-  
+
+  // 👇 IMPORTANT: force panel visible
+  detail.style.display = 'flex';
+
+  const lvlNames = {
+    1:'OTP — Quantum Secure',
+    2:'Quantum-seeded AES',
+    3:'AES-256-GCM',
+    4:'No encryption'
+  };
+
   detail.innerHTML = `
     <div class="detail-header">
       <div class="detail-subject">${esc(em.subject)}</div>
       <div class="detail-meta">
         <span>From: ${esc(em.from)}</span>
         <span>Date: ${esc(em.date)}</span>
-        ${em.is_qumail ? `<span style="color:var(--accent)">QuMail — Level ${em.qkd_level}: ${lvlNames[em.qkd_level]||''}</span>` : '<span style="color:var(--muted)">Standard email</span>'}
+        ${em.is_qumail
+          ? `<span style="color:var(--accent)">QuMail — Level ${em.qkd_level}: ${lvlNames[em.qkd_level]}</span>`
+          : `<span style="color:var(--muted)">Standard email</span>`}
       </div>
     </div>
-    <div class="detail-body" id="email-body">${esc(em.body)}</div>
+
+    <div class="detail-body" id="email-body">
+      ${esc(em.body)}
+    </div>
+
     <div class="decrypt-bar">
-      ${em.is_qumail ? `<button class="btn btn-primary btn-sm" onclick="decryptCurrent()">🔓 Decrypt</button>` : '<span style="font-size:12px;color:var(--muted)">Not a QuMail message</span>'}
+      ${em.is_qumail
+        ? `<button class="btn btn-primary btn-sm" onclick="decryptCurrent()">🔓 Decrypt</button>`
+        : `<span style="font-size:12px;color:var(--muted)">Not a QuMail message</span>`}
       <div id="decrypt-status"></div>
-    </div>`;
+    </div>
+  `;
 }
 
 async function decryptCurrent() {
