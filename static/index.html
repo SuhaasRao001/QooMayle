@@ -213,9 +213,9 @@
         </div>
       </div>
       <div id="detail-panel">
-        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px">
-          Select an email to read
-        </div>
+        <div id="detail-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px">
+  Select an email to read
+</div>
       </div>
     </div>
 
@@ -439,6 +439,8 @@ function renderEmailList() {
 }
 
 async function openEmail(idx) {
+  document.getElementById('detail-placeholder') && 
+  (document.getElementById('detail-placeholder').style.display = 'none');
   S.selectedEmail = idx;
 
   document.querySelectorAll('.email-row').forEach((r,i) => {
