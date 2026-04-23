@@ -127,11 +127,14 @@ async def send_email(payload: SendPayload):
     key_hex = None
 
     if payload.level in (1, 2):
-        # Key sizing must account for the full bundle (body + attachments),
-        # not just the body text, so OTP has enough key material.
+        # Key sizing: for OTP use the post-compression byte count (matching what
+        # crypto.encrypt() actually XORs); for L2 a single key always suffices.
         attachments_data = [a.model_dump() for a in payload.attachments]
-        bundle_str = crypto.compute_bundle(payload.body, attachments_data)
-        msg_bytes = len(bundle_str.encode("utf-8"))
+        if payload.level == 1:
+            msg_bytes = crypto.compute_otp_byte_count(payload.body, attachments_data)
+        else:
+            bundle_str = crypto.compute_bundle(payload.body, attachments_data)
+            msg_bytes = len(bundle_str.encode("utf-8"))
         keys_needed = max(1, -(-msg_bytes // km_simulator.KEY_SIZE_BYTES))  # ceiling division
         km_result = km_simulator.get_keys(
             payload.sender_sae_id,

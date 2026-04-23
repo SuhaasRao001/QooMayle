@@ -19,6 +19,7 @@ Level 4 — No encryption (plaintext)
 import os
 import base64
 import json
+import zlib
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -61,10 +62,21 @@ def compute_bundle(body: str, attachments: list = None) -> str:
     return _pack_bundle(body, attachments)
 
 
+def compute_otp_byte_count(body: str, attachments: list = None) -> int:
+    """Return the exact number of OTP key bytes needed for this message.
+
+    Because encrypt() compresses the bundle before XOR, this function applies
+    the same compression so main.py can request the correct number of keys.
+    """
+    bundle = _pack_bundle(body, attachments)
+    return len(zlib.compress(bundle.encode("utf-8"), level=9))
+
+
 # ─── Level 1: One-Time Pad ────────────────────────────────────────────────────
 
-def otp_encrypt(plaintext: str, key_hex: str) -> dict:
-    pt_bytes = plaintext.encode("utf-8")
+def otp_encrypt(plaintext, key_hex: str) -> dict:
+    """plaintext may be str or raw bytes (bytes avoids overhead for pre-compressed data)."""
+    pt_bytes = plaintext if isinstance(plaintext, (bytes, bytearray)) else plaintext.encode("utf-8")
     key_bytes = bytes.fromhex(key_hex)
     if len(key_bytes) < len(pt_bytes):
         raise ValueError(
@@ -81,10 +93,11 @@ def otp_encrypt(plaintext: str, key_hex: str) -> dict:
     }
 
 
-def otp_decrypt(payload: dict, key_hex: str) -> str:
+def otp_decrypt(payload: dict, key_hex: str) -> bytes:
+    """Returns raw bytes; caller decides whether to decompress / decode."""
     ct = _unb64(payload["ciphertext"])
     key_bytes = bytes.fromhex(key_hex)[:payload["msg_len"]]
-    return bytes(a ^ b for a, b in zip(ct, key_bytes)).decode("utf-8")
+    return bytes(a ^ b for a, b in zip(ct, key_bytes))
 
 
 # ─── Level 2: Quantum-seeded AES-256-GCM ─────────────────────────────────────
@@ -163,10 +176,18 @@ def encrypt(plaintext: str, level: int, key_hex: str = None, attachments: list =
     Attachments (list of {filename, data_b64, mime_type, size} dicts) are bundled
     with the body *before* any crypto function runs, so the chosen security level
     protects the full message payload atomically.
+
+    For Level 1 (OTP), the bundle is first compressed with zlib so that OTP
+    key consumption matches the compressed byte-length rather than the inflated
+    base64-JSON size.  The payload gains a 'compressed' flag so decrypt() knows
+    to decompress after XOR.
     """
     bundle = _pack_bundle(plaintext, attachments)
     if level == 1:
-        payload = otp_encrypt(bundle, key_hex)
+        # Compress before XOR: reduces key consumption significantly for binary content
+        bundle_bytes = zlib.compress(bundle.encode("utf-8"), level=9)
+        payload = otp_encrypt(bundle_bytes, key_hex)
+        payload["compressed"] = True          # signal for decrypt()
     elif level == 2:
         payload = qaes_encrypt(bundle, key_hex)
     elif level == 3:
@@ -185,7 +206,13 @@ def decrypt(payload_json: str, key_hex: str = None) -> tuple:
     payload = json.loads(payload_json)
     level = payload.get("level", 4)
     if level == 1:
-        raw = otp_decrypt(payload, key_hex)
+        raw_bytes = otp_decrypt(payload, key_hex)
+        if payload.get("compressed"):
+            # Modern path: decompress after XOR
+            raw = zlib.decompress(raw_bytes).decode("utf-8")
+        else:
+            # Legacy path: plain-text OTP messages (no compression)
+            raw = raw_bytes.decode("utf-8")
     elif level == 2:
         raw = qaes_decrypt(payload, key_hex)
     elif level == 3:
