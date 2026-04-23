@@ -31,6 +31,36 @@ def _unb64(s: str) -> bytes:
     return base64.b64decode(s.encode())
 
 
+# ─── Bundle helpers ──────────────────────────────────────────────────────────
+
+def _pack_bundle(body: str, attachments: list = None) -> str:
+    """Combine message body + attachment list into one JSON string before encryption.
+    Attachments is a list of {filename, data_b64, mime_type, size} dicts.
+    """
+    return json.dumps({"body": body, "attachments": attachments or []})
+
+
+def _unpack_bundle(decrypted_text: str) -> tuple:
+    """Extract body + attachments from a decrypted bundle string.
+    Falls back gracefully for legacy messages that contain raw plaintext.
+    """
+    try:
+        obj = json.loads(decrypted_text)
+        if isinstance(obj, dict) and "body" in obj:
+            return obj["body"], obj.get("attachments", [])
+    except Exception:
+        pass
+    # Legacy / non-QuMail message — treat entire text as body
+    return decrypted_text, []
+
+
+def compute_bundle(body: str, attachments: list = None) -> str:
+    """Return the bundle string that will be encrypted.
+    Exposed so callers (e.g. main.py) can compute byte-length for OTP key sizing.
+    """
+    return _pack_bundle(body, attachments)
+
+
 # ─── Level 1: One-Time Pad ────────────────────────────────────────────────────
 
 def otp_encrypt(plaintext: str, key_hex: str) -> dict:
@@ -127,28 +157,40 @@ def plain_decrypt(payload: dict) -> str:
 
 # ─── Unified interface ────────────────────────────────────────────────────────
 
-def encrypt(plaintext: str, level: int, key_hex: str = None) -> str:
-    """Returns JSON string to embed in email body."""
+def encrypt(plaintext: str, level: int, key_hex: str = None, attachments: list = None) -> str:
+    """Returns JSON string to embed in email body.
+
+    Attachments (list of {filename, data_b64, mime_type, size} dicts) are bundled
+    with the body *before* any crypto function runs, so the chosen security level
+    protects the full message payload atomically.
+    """
+    bundle = _pack_bundle(plaintext, attachments)
     if level == 1:
-        payload = otp_encrypt(plaintext, key_hex)
+        payload = otp_encrypt(bundle, key_hex)
     elif level == 2:
-        payload = qaes_encrypt(plaintext, key_hex)
+        payload = qaes_encrypt(bundle, key_hex)
     elif level == 3:
-        payload = aes_encrypt(plaintext)
+        payload = aes_encrypt(bundle)
     else:
-        payload = plain_encrypt(plaintext)
+        payload = plain_encrypt(bundle)
     return json.dumps(payload)
 
 
-def decrypt(payload_json: str, key_hex: str = None) -> tuple[str, int]:
-    """Returns (plaintext, level)."""
+def decrypt(payload_json: str, key_hex: str = None) -> tuple:
+    """Returns (plaintext, level, attachments).
+
+    attachments is a list of {filename, data_b64, mime_type, size} dicts.
+    It is an empty list for messages sent without attachments or by older clients.
+    """
     payload = json.loads(payload_json)
     level = payload.get("level", 4)
     if level == 1:
-        return otp_decrypt(payload, key_hex), 1
+        raw = otp_decrypt(payload, key_hex)
     elif level == 2:
-        return qaes_decrypt(payload, key_hex), 2
+        raw = qaes_decrypt(payload, key_hex)
     elif level == 3:
-        return aes_decrypt(payload), 3
+        raw = aes_decrypt(payload)
     else:
-        return plain_decrypt(payload), 4
+        raw = plain_decrypt(payload)
+    body, attachments = _unpack_bundle(raw)
+    return body, level, attachments

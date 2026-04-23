@@ -32,6 +32,14 @@ class LoginPayload(BaseModel):
     peer_sae_id: str = ""       # Pre-populate for demo convenience
 
 
+class AttachmentItem(BaseModel):
+    """A single file attachment, base64-encoded by the browser before transit."""
+    filename: str
+    data_b64: str
+    mime_type: str = "application/octet-stream"
+    size: int = 0
+
+
 class SendPayload(BaseModel):
     sender_email: str
     sender_password: str
@@ -41,6 +49,7 @@ class SendPayload(BaseModel):
     subject: str
     body: str
     level: int = 2              # Default to Level 2 (quantum-seeded AES)
+    attachments: List[AttachmentItem] = []
 
 
 class DecryptPayload(BaseModel):
@@ -118,8 +127,11 @@ async def send_email(payload: SendPayload):
     key_hex = None
 
     if payload.level in (1, 2):
-        # For OTP, we need ceil(msg_bytes / 32) keys to cover the full message
-        msg_bytes = len(payload.body.encode("utf-8"))
+        # Key sizing must account for the full bundle (body + attachments),
+        # not just the body text, so OTP has enough key material.
+        attachments_data = [a.model_dump() for a in payload.attachments]
+        bundle_str = crypto.compute_bundle(payload.body, attachments_data)
+        msg_bytes = len(bundle_str.encode("utf-8"))
         keys_needed = max(1, -(-msg_bytes // km_simulator.KEY_SIZE_BYTES))  # ceiling division
         km_result = km_simulator.get_keys(
             payload.sender_sae_id,
@@ -136,7 +148,12 @@ async def send_email(payload: SendPayload):
             key_id = km_result["keys"][0]["key_ID"]
             key_hex = "".join(k["key"] for k in km_result["keys"])
 
-    encrypted_body = crypto.encrypt(payload.body, payload.level, key_hex)
+    encrypted_body = crypto.encrypt(
+        payload.body,
+        payload.level,
+        key_hex,
+        attachments=[a.model_dump() for a in payload.attachments],
+    )
 
     result = await email_handler.send_email(
         sender=payload.sender_email,
@@ -179,8 +196,8 @@ async def decrypt_email(payload: DecryptPayload):
             key_hex = km_result["keys"][0]["key"]
 
     try:
-        plaintext, level = crypto.decrypt(payload.encrypted_body, key_hex)
-        return {"success": True, "plaintext": plaintext, "level": level}
+        plaintext, level, attachments = crypto.decrypt(payload.encrypted_body, key_hex)
+        return {"success": True, "plaintext": plaintext, "level": level, "attachments": attachments}
     except Exception as e:
         raise HTTPException(400, f"Decryption failed: {str(e)}")
 

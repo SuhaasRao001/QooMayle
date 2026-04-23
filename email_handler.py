@@ -12,8 +12,6 @@ import email as email_lib
 import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 from typing import Optional
 import aiosmtplib
 import aioimaplib
@@ -52,7 +50,6 @@ async def send_email(
     key_id: Optional[str],
     level: int,
     sender_sae_id: str,
-    attachments: list = None,
 ) -> dict:
     """Send an email with encrypted body and QKD headers."""
     try:
@@ -71,15 +68,10 @@ async def send_email(
         msg["X-QKD-Level"] = str(level)
         msg["X-QKD-App"] = "QuMail-1.0"
 
+        # The encrypted_body JSON blob already contains any attachments bundled
+        # and protected under the same quantum-secure level as the message body.
+        # No plaintext MIME attachments are added here.
         msg.attach(MIMEText(encrypted_body, "plain"))
-
-        # Handle file attachments
-        for attachment in (attachments or []):
-            part = MIMEBase("application", "octet-stream")
-            part.set_payload(attachment["data"])
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f'attachment; filename="{attachment["filename"]}"')
-            msg.attach(part)
 
         if provider == "outlook":
             # Outlook uses STARTTLS on 587

@@ -124,6 +124,19 @@
   .loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 20px; }
 
   select option { background: var(--bg2); }
+
+  /* ── File input (compose) ── */
+  .file-input-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg3); border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); transition: all .2s; }
+  .file-input-label:hover { border-color: var(--accent); color: var(--text); }
+  input[type="file"] { display: none; }
+  .file-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .file-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; font-size: 11px; color: var(--muted); }
+
+  /* ── Attachment download bar (detail view) ── */
+  .attachments-bar { padding: 10px 20px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+  .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--accent2); text-decoration: none; transition: border-color .15s, background .15s; }
+  .attachment-chip:hover { border-color: var(--accent2); background: #1a2e2e; }
+  .attachment-size { font-size: 10px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -260,6 +273,15 @@
           <div class="form-group">
             <label>Message</label>
             <textarea id="compose-body" rows="8" placeholder="Write your message here..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Attachments <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— encrypted with message</span></label>
+            <label class="file-input-label" for="compose-files">
+              <span>📎</span>
+              <span id="file-label-text">Choose files to attach…</span>
+            </label>
+            <input type="file" id="compose-files" multiple onchange="updateFileChips()">
+            <div class="file-chips" id="file-chips"></div>
           </div>
         </div>
         <div class="compose-footer">
@@ -476,6 +498,8 @@ async function openEmail(idx) {
       ${esc(em.body)}
     </div>
 
+    <div id="email-attachments" class="attachments-bar" style="display:none"></div>
+
     <div class="decrypt-bar">
       ${em.is_qumail
         ? `<button class="btn btn-primary btn-sm" onclick="decryptCurrent()">🔓 Decrypt</button>`
@@ -501,6 +525,23 @@ async function decryptCurrent() {
     });
     document.getElementById('email-body').textContent = r.plaintext;
     status.innerHTML = `<span class="decrypt-status ok">✓ Decrypted — Level ${r.level}</span>`;
+
+    // Render decrypted attachments as download links
+    const bar = document.getElementById('email-attachments');
+    if (bar && r.attachments && r.attachments.length > 0) {
+      bar.style.display = 'flex';
+      bar.innerHTML =
+        `<span style="font-size:12px;color:var(--muted);flex-shrink:0;align-self:center">📎 Attachments:</span>` +
+        r.attachments.map(att =>
+          `<a class="attachment-chip"
+              href="data:${att.mime_type};base64,${att.data_b64}"
+              download="${esc(att.filename)}"
+              title="Download ${esc(att.filename)}">
+            📄 ${esc(att.filename)}
+            <span class="attachment-size">${formatBytes(att.size)}</span>
+          </a>`
+        ).join('');
+    }
   } catch(e) {
     status.innerHTML = `<span class="decrypt-status fail">✗ ${e.message}</span>`;
   }
@@ -517,6 +558,32 @@ function selectLevel(n) {
   document.getElementById('enc-preview').style.display = 'none';
 }
 
+// ── Attachment helpers ──
+function updateFileChips() {
+  const input = document.getElementById('compose-files');
+  const chips = document.getElementById('file-chips');
+  const n = input.files.length;
+  document.getElementById('file-label-text').textContent =
+    n === 0 ? 'Choose files to attach…' : `${n} file${n > 1 ? 's' : ''} selected`;
+  chips.innerHTML = Array.from(input.files).map(f =>
+    `<span class="file-chip">📎 ${esc(f.name)} <span style="color:var(--muted)">${formatBytes(f.size)}</span></span>`
+  ).join('');
+}
+
+async function readFilesAsBase64(fileList) {
+  const results = [];
+  for (const file of fileList) {
+    const data_b64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    results.push({ filename: file.name, data_b64, mime_type: file.type || 'application/octet-stream', size: file.size });
+  }
+  return results;
+}
+
 async function sendEmail() {
   const to = document.getElementById('compose-to').value.trim();
   const peerSae = document.getElementById('compose-peer-sae').value.trim();
@@ -526,16 +593,30 @@ async function sendEmail() {
 
   if (!to || !body) { result.innerHTML = '<span class="send-result fail">To and message body are required.</span>'; return; }
 
+  const filesEl = document.getElementById('compose-files');
+  result.innerHTML = filesEl.files.length
+    ? '<span class="spin"></span> Reading attachments…'
+    : '<span class="spin"></span>';
+
+  const attachments = await readFilesAsBase64(filesEl.files);
   result.innerHTML = '<span class="spin"></span>';
+
   try {
     const r = await api('/api/email/send', 'POST', {
       sender_email: S.email, sender_password: S.password,
       sender_sae_id: S.saeId, recipient_email: to,
       recipient_sae_id: peerSae || S.peerSaeId,
       subject, body, level: S.selectedLevel,
+      attachments,
     });
-    result.innerHTML = `<span class="send-result ok">✓ Sent — Level ${r.level_used} | Key: ${r.key_id ? r.key_id.substring(0,8)+'...' : 'none'}</span>`;
-    setTimeout(() => { document.getElementById('compose-body').value = ''; result.innerHTML = ''; }, 4000);
+    const attNote = attachments.length ? ` | ${attachments.length} file(s) encrypted` : '';
+    result.innerHTML = `<span class="send-result ok">✓ Sent — Level ${r.level_used} | Key: ${r.key_id ? r.key_id.substring(0,8)+'...' : 'none'}${attNote}</span>`;
+    setTimeout(() => {
+      document.getElementById('compose-body').value = '';
+      document.getElementById('compose-files').value = '';
+      updateFileChips();
+      result.innerHTML = '';
+    }, 4000);
   } catch(e) {
     result.innerHTML = `<span class="send-result fail">✗ ${e.message}</span>`;
   }
@@ -635,6 +716,13 @@ function esc(s) {
 function formatDate(d) {
   if (!d) return '';
   try { return new Date(d).toLocaleDateString(); } catch(e) { return d.substring(0,10); }
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 </script>
 </body>
