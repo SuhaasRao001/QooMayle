@@ -50,7 +50,6 @@ async def send_email(
     key_id: Optional[str],
     level: int,
     sender_sae_id: str,
-    recipient_sae_id: str = "",
 ) -> dict:
     """Send an email with encrypted body and QKD headers."""
     try:
@@ -66,8 +65,6 @@ async def send_email(
         if key_id:
             msg["X-QKD-KeyID"] = key_id
             msg["X-QKD-SenderSAE"] = sender_sae_id
-        if recipient_sae_id:
-            msg["X-QKD-RecipientSAE"] = recipient_sae_id
         msg["X-QKD-Level"] = str(level)
         msg["X-QKD-App"] = "QuMail-1.0"
 
@@ -145,7 +142,6 @@ async def fetch_emails(email_addr: str, password: str, folder: str = "INBOX", li
                 "qkd_key_id": parsed.get("X-QKD-KeyID", None),
                 "qkd_level": int(parsed.get("X-QKD-Level", 4)),
                 "qkd_sender_sae": parsed.get("X-QKD-SenderSAE", None),
-                "qkd_recipient_sae": parsed.get("X-QKD-RecipientSAE", None),
                 "is_qumail": parsed.get("X-QKD-App", None) == "QuMail-1.0",
             })
 
