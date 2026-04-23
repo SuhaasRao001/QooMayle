@@ -14,7 +14,7 @@ from datetime import datetime
 key_pools: Dict[str, Dict[str, str]] = {}
 key_metadata: Dict[str, dict] = {}
 
-POOL_SIZE = 50          # pre-generate this many keys per SAE pair
+POOL_SIZE = 100_000     # 100k × 32 B = 3.2 MB key material — supports OTP on attachments up to ~3 MB
 KEY_SIZE_BYTES = 32     # 256-bit keys
 
 
