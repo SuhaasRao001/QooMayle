@@ -96,7 +96,13 @@ def otp_encrypt(plaintext, key_hex: str) -> dict:
 def otp_decrypt(payload: dict, key_hex: str) -> bytes:
     """Returns raw bytes; caller decides whether to decompress / decode."""
     ct = _unb64(payload["ciphertext"])
-    key_bytes = bytes.fromhex(key_hex)[:payload["msg_len"]]
+    expected_len = payload["msg_len"]
+    if len(ct) < expected_len:
+        raise ValueError(
+            f"Email body is truncated ({len(ct)} of {expected_len} bytes recovered). "
+            "The encrypted content was likely modified or cut short during email transit."
+        )
+    key_bytes = bytes.fromhex(key_hex)[:expected_len]
     return bytes(a ^ b for a, b in zip(ct, key_bytes))
 
 

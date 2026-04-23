@@ -57,6 +57,7 @@ class DecryptPayload(BaseModel):
     qkd_key_id: Optional[str] = None
     qkd_level: int = 4
     qkd_sender_sae: Optional[str] = None
+    qkd_recipient_sae: Optional[str] = None   # X-QKD-RecipientSAE header from the email
     recipient_email: str
     recipient_password: str
     recipient_sae_id: str
@@ -167,6 +168,7 @@ async def send_email(payload: SendPayload):
         key_id=key_id,
         level=payload.level,
         sender_sae_id=payload.sender_sae_id,
+        recipient_sae_id=payload.recipient_sae_id,
     )
 
     if not result["success"]:
@@ -190,8 +192,12 @@ async def decrypt_email(payload: DecryptPayload):
     key_hex = None
 
     if payload.qkd_level in (1, 2) and payload.qkd_key_id and payload.qkd_sender_sae:
+        # Use the RecipientSAE from the email header when available so we look in the
+        # correct pool (the one created at send time).  Fall back to recipient_sae_id
+        # for legacy emails that don't carry the header.
+        slave_sae = payload.qkd_recipient_sae or payload.recipient_sae_id
         km_result = km_simulator.get_key_by_id(
-            slave_sae_id=payload.recipient_sae_id,
+            slave_sae_id=slave_sae,
             master_sae_id=payload.qkd_sender_sae,
             key_ids=[payload.qkd_key_id],
         )
