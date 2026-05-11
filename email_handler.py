@@ -41,6 +41,8 @@ def detect_provider(email_addr: str) -> str:
     return "gmail"  # default fallback
 
 
+import socket
+
 async def send_email(
     sender: str,
     password: str,
@@ -55,42 +57,62 @@ async def send_email(
     try:
         provider = detect_provider(sender)
         cfg = SMTP_CONFIGS[provider]
+        
+        print(f"DEBUG: Attempting to send via {provider} ({cfg['host']}:{cfg['port']})")
 
         msg = MIMEMultipart()
         msg["From"] = sender
         msg["To"] = recipient
         msg["Subject"] = subject
 
-        # QKD metadata headers — recipient's app reads these to know which key to fetch
+        # QKD metadata headers
         if key_id:
             msg["X-QKD-KeyID"] = key_id
             msg["X-QKD-SenderSAE"] = sender_sae_id
         msg["X-QKD-Level"] = str(level)
         msg["X-QKD-App"] = "QuMail-1.0"
 
-        # The encrypted_body JSON blob already contains any attachments bundled
-        # and protected under the same quantum-secure level as the message body.
-        # No plaintext MIME attachments are added here.
         msg.attach(MIMEText(encrypted_body, "plain"))
 
-        # Port 465 is Implicit SSL (use_tls=True)
-        # Port 587 is STARTTLS (start_tls=True)
-        use_implicit_ssl = (cfg["port"] == 465)
+        # Explicitly resolve to IPv4 to avoid IPv6 timeout issues
+        try:
+            addr_info = socket.getaddrinfo(cfg["host"], cfg["port"], socket.AF_INET, socket.SOCK_STREAM)
+            target_ip = addr_info[0][4][0]
+            print(f"DEBUG: Resolved {cfg['host']} to IPv4: {target_ip}")
+        except Exception as dns_err:
+            print(f"DEBUG: DNS resolution failed: {dns_err}")
+            target_ip = cfg["host"]
 
-        await aiosmtplib.send(
-            msg,
-            hostname=cfg["host"],
+        use_implicit_ssl = (cfg["port"] == 465)
+        
+        # Using manual client for better control/timeouts
+        smtp_client = aiosmtplib.SMTP(
+            hostname=target_ip,
             port=cfg["port"],
-            username=sender,
-            password=password,
             use_tls=use_implicit_ssl,
-            start_tls=not use_implicit_ssl,
             timeout=60
         )
-
+        
+        print("DEBUG: Connecting to SMTP...")
+        await smtp_client.connect()
+        
+        if not use_implicit_ssl:
+            print("DEBUG: Starting TLS...")
+            await smtp_client.starttls()
+            
+        print("DEBUG: Logging in...")
+        await smtp_client.login(sender, password)
+        
+        print("DEBUG: Sending message...")
+        await smtp_client.send_message(msg)
+        
+        await smtp_client.quit()
+        print("DEBUG: Send successful!")
+        
         return {"success": True}
 
     except Exception as e:
+        print(f"DEBUG: SMTP ERROR: {e}")
         return {"success": False, "error": str(e)}
 
 
