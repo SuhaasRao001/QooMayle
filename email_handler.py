@@ -15,6 +15,7 @@ from email.mime.text import MIMEText
 from typing import Optional
 import aiosmtplib
 import aioimaplib
+import socket
 
 
 SMTP_CONFIGS = {
@@ -74,27 +75,31 @@ async def send_email(
 
         msg.attach(MIMEText(encrypted_body, "plain"))
 
-        # Explicitly resolve to IPv4 to avoid IPv6 timeout issues
-        try:
-            addr_info = socket.getaddrinfo(cfg["host"], cfg["port"], socket.AF_INET, socket.SOCK_STREAM)
-            target_ip = addr_info[0][4][0]
-            print(f"DEBUG: Resolved {cfg['host']} to IPv4: {target_ip}")
-        except Exception as dns_err:
-            print(f"DEBUG: DNS resolution failed: {dns_err}")
-            target_ip = cfg["host"]
-
+        # Create proper TLS context for secure connections
+        tls_context = ssl.create_default_context()
+        tls_context.check_hostname = True
+        tls_context.verify_mode = ssl.CERT_REQUIRED
+        
         use_implicit_ssl = (cfg["port"] == 465)
         
-        # Using manual client for better control/timeouts
+        print(f"DEBUG: Creating SMTP client with hostname={cfg['host']}, port={cfg['port']}, use_tls={use_implicit_ssl}")
+        
+        # Using aiosmtplib with proper TLS context and reasonable timeouts
         smtp_client = aiosmtplib.SMTP(
-            hostname=target_ip,
+            hostname=cfg["host"],
             port=cfg["port"],
             use_tls=use_implicit_ssl,
-            timeout=60
+            timeout=30,
+            tls_context=tls_context
         )
         
         print("DEBUG: Connecting to SMTP...")
-        await smtp_client.connect()
+        try:
+            await smtp_client.connect()
+        except asyncio.TimeoutError:
+            print("ERROR: SMTP connection timeout. Your ISP may be blocking SMTP ports.")
+            print("Try using port 2525 (if supported) or check firewall settings.")
+            raise
         
         if not use_implicit_ssl:
             print("DEBUG: Starting TLS...")
