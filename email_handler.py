@@ -18,7 +18,7 @@ import aioimaplib
 
 
 SMTP_CONFIGS = {
-    "gmail": {"host": "smtp.gmail.com", "port": 587},
+    "gmail": {"host": "smtp.gmail.com", "port": 465},
     "yahoo": {"host": "smtp.mail.yahoo.com", "port": 465},
     "outlook": {"host": "smtp-mail.outlook.com", "port": 587},
 }
@@ -73,28 +73,20 @@ async def send_email(
         # No plaintext MIME attachments are added here.
         msg.attach(MIMEText(encrypted_body, "plain"))
 
-        # Gmail and Outlook work best on 587 with STARTTLS
-        if provider in ("gmail", "outlook"):
-            await aiosmtplib.send(
-                msg,
-                hostname=cfg["host"],
-                port=cfg["port"],
-                username=sender,
-                password=password,
-                start_tls=True,
-                timeout=30
-            )
-        else:
-            # Yahoo still prefers SSL on 465
-            await aiosmtplib.send(
-                msg,
-                hostname=cfg["host"],
-                port=cfg["port"],
-                username=sender,
-                password=password,
-                use_tls=True,
-                timeout=30
-            )
+        # Port 465 is Implicit SSL (use_tls=True)
+        # Port 587 is STARTTLS (start_tls=True)
+        use_implicit_ssl = (cfg["port"] == 465)
+
+        await aiosmtplib.send(
+            msg,
+            hostname=cfg["host"],
+            port=cfg["port"],
+            username=sender,
+            password=password,
+            use_tls=use_implicit_ssl,
+            start_tls=not use_implicit_ssl,
+            timeout=60
+        )
 
         return {"success": True}
 
