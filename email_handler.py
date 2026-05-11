@@ -50,7 +50,6 @@ async def send_email(
     key_id: Optional[str],
     level: int,
     sender_sae_id: str,
-    message_id: Optional[str] = None,
 ) -> dict:
     """Send an email with encrypted body and QKD headers."""
     try:
@@ -64,14 +63,10 @@ async def send_email(
 
         # QKD metadata headers — recipient's app reads these to know which key to fetch
         if key_id:
-            msg["X-QKD-KeyID"]    = key_id
+            msg["X-QKD-KeyID"] = key_id
             msg["X-QKD-SenderSAE"] = sender_sae_id
         msg["X-QKD-Level"] = str(level)
-        msg["X-QKD-App"]   = "QuMail-2.0"
-        if message_id:
-            msg["X-QKD-MsgID"] = message_id
-        import time
-        msg["X-QKD-Timestamp"] = str(int(time.time()))
+        msg["X-QKD-App"] = "QuMail-1.0"
 
         # The encrypted_body JSON blob already contains any attachments bundled
         # and protected under the same quantum-secure level as the message body.
@@ -138,18 +133,16 @@ async def fetch_emails(email_addr: str, password: str, folder: str = "INBOX", li
                     body = payload.decode("utf-8", errors="replace")
 
             emails.append({
-                "uid":           uid.decode(),
-                "from":          parsed.get("From", ""),
-                "to":            parsed.get("To", ""),
-                "subject":       parsed.get("Subject", "(no subject)"),
-                "date":          parsed.get("Date", ""),
-                "body":          body,
-                "qkd_key_id":    parsed.get("X-QKD-KeyID", None),
-                "qkd_level":     int(parsed.get("X-QKD-Level", 4)),
+                "uid": uid.decode(),
+                "from": parsed.get("From", ""),
+                "to": parsed.get("To", ""),
+                "subject": parsed.get("Subject", "(no subject)"),
+                "date": parsed.get("Date", ""),
+                "body": body,
+                "qkd_key_id": parsed.get("X-QKD-KeyID", None),
+                "qkd_level": int(parsed.get("X-QKD-Level", 4)),
                 "qkd_sender_sae": parsed.get("X-QKD-SenderSAE", None),
-                "qkd_msg_id":    parsed.get("X-QKD-MsgID", None),
-                "qkd_timestamp": parsed.get("X-QKD-Timestamp", None),
-                "is_qumail":     parsed.get("X-QKD-App", None) in ("QuMail-1.0", "QuMail-2.0"),
+                "is_qumail": parsed.get("X-QKD-App", None) == "QuMail-1.0",
             })
 
         await imap.logout()
