@@ -15,7 +15,6 @@ from email.mime.text import MIMEText
 from typing import Optional
 import aiosmtplib
 import aioimaplib
-import socket
 
 
 SMTP_CONFIGS = {
@@ -42,8 +41,6 @@ def detect_provider(email_addr: str) -> str:
     return "gmail"  # default fallback
 
 
-import socket
-
 async def send_email(
     sender: str,
     password: str,
@@ -58,66 +55,35 @@ async def send_email(
     try:
         provider = detect_provider(sender)
         cfg = SMTP_CONFIGS[provider]
-        
-        print(f"DEBUG: Attempting to send via {provider} ({cfg['host']}:{cfg['port']})")
 
         msg = MIMEMultipart()
         msg["From"] = sender
         msg["To"] = recipient
         msg["Subject"] = subject
 
-        # QKD metadata headers
+        # QKD metadata headers — recipient's app reads these to know which key to fetch
         if key_id:
             msg["X-QKD-KeyID"] = key_id
             msg["X-QKD-SenderSAE"] = sender_sae_id
         msg["X-QKD-Level"] = str(level)
         msg["X-QKD-App"] = "QuMail-1.0"
 
+        # The encrypted_body JSON blob already contains any attachments bundled
+        # and protected under the same quantum-secure level as the message body.
+        # No plaintext MIME attachments are added here.
         msg.attach(MIMEText(encrypted_body, "plain"))
 
-        # Create proper TLS context for secure connections
-        tls_context = ssl.create_default_context()
-        tls_context.check_hostname = True
-        tls_context.verify_mode = ssl.CERT_REQUIRED
-        
-        use_implicit_ssl = (cfg["port"] == 465)
-        
-        print(f"DEBUG: Creating SMTP client with hostname={cfg['host']}, port={cfg['port']}, use_tls={use_implicit_ssl}")
-        
-        # Using aiosmtplib with proper TLS context and reasonable timeouts
-        smtp_client = aiosmtplib.SMTP(
-            hostname=cfg["host"],
-            port=cfg["port"],
-            use_tls=use_implicit_ssl,
-            timeout=30,
-            tls_context=tls_context
-        )
-        
-        print("DEBUG: Connecting to SMTP...")
-        try:
-            await smtp_client.connect()
-        except asyncio.TimeoutError:
-            print("ERROR: SMTP connection timeout. Your ISP may be blocking SMTP ports.")
-            print("Try using port 2525 (if supported) or check firewall settings.")
-            raise
-        
-        if not use_implicit_ssl:
-            print("DEBUG: Starting TLS...")
-            await smtp_client.starttls()
-            
-        print("DEBUG: Logging in...")
-        await smtp_client.login(sender, password)
-        
-        print("DEBUG: Sending message...")
-        await smtp_client.send_message(msg)
-        
-        await smtp_client.quit()
-        print("DEBUG: Send successful!")
-        
+        if provider == "outlook":
+            # Outlook uses STARTTLS on 587
+            await aiosmtplib.send(msg, hostname=cfg["host"], port=cfg["port"],
+                                  username=sender, password=password, start_tls=True)
+        else:
+            await aiosmtplib.send(msg, hostname=cfg["host"], port=cfg["port"],
+                                  username=sender, password=password, use_tls=True)
+
         return {"success": True}
 
     except Exception as e:
-        print(f"DEBUG: SMTP ERROR: {e}")
         return {"success": False, "error": str(e)}
 
 
