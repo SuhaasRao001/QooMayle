@@ -1,729 +1,1464 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QuMail — Quantum Secure Email</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QuMail v2 — Quantum-Secure Email</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg: #0f1117; --bg2: #1a1d27; --bg3: #22263a;
-    --border: #2e3348; --text: #e8eaf0; --muted: #7b82a0;
-    --accent: #6c63ff; --accent2: #4ecdc4;
-    --l1: #a855f7; --l2: #3b82f6; --l3: #f59e0b; --l4: #6b7280;
-    --success: #22c55e; --danger: #ef4444; --warn: #f59e0b;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
-  
-  /* ── Top bar ── */
-  header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 20px; height: 52px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-  .logo { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
-  .logo span { color: var(--accent2); }
-  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-  .km-badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600; background: #1e3a2a; color: var(--success); border: 1px solid #22c55e44; }
-  .km-badge.warn { background: #3a2e1e; color: var(--warn); border-color: #f59e0b44; }
-  .km-badge.err { background: #3a1e1e; color: var(--danger); border-color: #ef444444; }
-  .btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity .15s; }
-  .btn:hover { opacity: .85; }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
-  .btn-sm { padding: 4px 10px; font-size: 12px; }
-  .btn-danger { background: var(--danger); color: #fff; }
+:root {
+  --bg:        #080c10;
+  --surface:   #0d1117;
+  --surface2:  #161b22;
+  --surface3:  #1c2330;
+  --border:    #21293a;
+  --border2:   #2d3848;
+  --text:      #c9d1d9;
+  --text2:     #8b949e;
+  --text3:     #484f58;
+  --accent:    #00d4aa;
+  --accent2:   #00a87f;
+  --red:       #ff4d6d;
+  --blue:      #4da6ff;
+  --purple:    #b388ff;
+  --gold:      #ffd166;
+  --glow:      rgba(0,212,170,0.15);
+  --glow2:     rgba(0,212,170,0.05);
+  --font-mono: 'Space Mono', monospace;
+  --font-body: 'DM Sans', sans-serif;
+  --r:         8px;
+  --r2:        12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  display: flex;
+  height: 100vh;
+}
 
-  /* ── Layout ── */
-  .app { display: flex; flex: 1; overflow: hidden; }
-  
-  /* ── Sidebar ── */
-  aside { width: 220px; background: var(--bg2); border-right: 1px solid var(--border); padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column; }
-  .nav-btn { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; font-size: 14px; color: var(--muted); border: none; background: none; width: 100%; text-align: left; transition: all .15s; }
-  .nav-btn:hover, .nav-btn.active { background: var(--bg3); color: var(--text); }
-  .nav-btn.active { border-left: 3px solid var(--accent); padding-left: 17px; }
-  .nav-icon { font-size: 16px; width: 18px; }
-  .compose-btn { margin: 16px; }
-  .sidebar-bottom { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); }
-  .user-info { font-size: 12px; color: var(--muted); word-break: break-all; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-  /* ── Main content ── */
-  main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.logo {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--accent), var(--blue));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.logo-text {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.logo-text span { color: var(--accent); }
+.logo-sub {
+  font-size: 9px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+.nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--r);
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+  user-select: none;
+}
+.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item.active {
+  background: var(--glow2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.nav-item .nav-icon { font-size: 15px; width: 18px; text-align: center; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+.sidebar-bottom {
+  padding: 12px 8px;
+  border-top: 1px solid var(--border);
+}
+.user-pill {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.user-avatar {
+  width: 26px; height: 26px;
+  background: linear-gradient(135deg, var(--accent2), var(--blue));
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--bg);
+  flex-shrink: 0;
+}
+.user-info { overflow: hidden; }
+.user-email { font-size: 11px; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.user-sae { font-size: 10px; color: var(--text3); font-family: var(--font-mono); }
 
-  /* ── Login screen ── */
-  #login-screen { display: flex; align-items: center; justify-content: center; height: 100%; background: var(--bg); }
-  .login-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 36px; width: 420px; }
-  .login-card h2 { font-size: 22px; margin-bottom: 6px; }
-  .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
-  .form-group { margin-bottom: 14px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
-  input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 14px; outline: none; transition: border-color .15s; font-family: inherit; }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .divider { height: 1px; background: var(--border); margin: 16px 0; }
-  .error-msg { background: #3a1e1e; border: 1px solid #ef444433; color: var(--danger); padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; display: none; }
+/* ── Main ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-  /* ── Inbox panel ── */
-  #inbox-panel { display: none; flex: 1; overflow: hidden; flex-direction: row; }
-  .panel-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .panel-header h3 { font-size: 16px; font-weight: 600; }
-  .email-list { overflow-y: auto; flex: 1; }
-  .email-row { padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 12px; align-items: flex-start; transition: background .1s; }
-  .email-row:hover { background: var(--bg2); }
-  .email-row.selected { background: var(--bg3); border-left: 3px solid var(--accent); padding-left: 17px; }
-  .email-meta { flex: 1; min-width: 0; }
-  .email-from { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .email-subj { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .email-date { font-size: 11px; color: var(--muted); flex-shrink: 0; }
-  .sec-pill { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 700; flex-shrink: 0; }
-  .sec-1 { background: #3b1f5e; color: var(--l1); }
-  .sec-2 { background: #1e2f5e; color: var(--l2); }
-  .sec-3 { background: #3a2e0e; color: var(--l3); }
-  .sec-4 { background: #222; color: var(--l4); }
+/* ── Topbar ── */
+.topbar {
+  height: 52px; min-height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+}
+.topbar-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text2);
+}
+.topbar-title strong { color: var(--text); }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.km-status-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text2);
+  cursor: pointer;
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  /* ── Email detail ── */
-  #detail-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; border-left: 1px solid var(--border); }
-  .detail-header { padding: 16px 20px; border-bottom: 1px solid var(--border); }
-  .detail-subject { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-  .detail-meta { font-size: 12px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
-  .detail-body { padding: 20px; overflow-y: auto; flex: 1; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
-  .decrypt-bar { padding: 12px 20px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .decrypt-status { font-size: 12px; padding: 4px 10px; border-radius: 6px; }
-  .decrypt-status.ok { background: #1e3a2a; color: var(--success); }
-  .decrypt-status.fail { background: #3a1e1e; color: var(--danger); }
-  .decrypt-status.plain { background: #222; color: var(--muted); }
+/* ── Content area ── */
+.content { flex: 1; overflow: hidden; position: relative; }
+.view { display: none; height: 100%; overflow-y: auto; }
+.view.active { display: flex; flex-direction: column; }
 
-  /* ── Compose ── */
-  #compose-panel { display: none; flex: 1; overflow-y: auto; padding: 24px; }
-  .compose-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; max-width: 680px; }
-  .compose-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 600; }
-  .compose-body { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-  .security-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .sec-opt { padding: 10px 12px; border-radius: 8px; border: 2px solid var(--border); cursor: pointer; transition: all .15s; }
-  .sec-opt:hover { border-color: var(--accent); }
-  .sec-opt.selected { border-color: var(--accent); background: var(--bg3); }
-  .sec-opt-title { font-size: 13px; font-weight: 600; }
-  .sec-opt-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .compose-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-  .send-result { font-size: 12px; padding: 8px 12px; border-radius: 6px; }
-  .send-result.ok { background: #1e3a2a; color: var(--success); }
-  .send-result.fail { background: #3a1e1e; color: var(--danger); }
+/* ══ LOGIN VIEW ══ */
+#view-login {
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.login-card {
+  width: 380px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 36px 32px;
+  box-shadow: 0 0 60px rgba(0,212,170,0.05);
+}
+.login-header { text-align: center; margin-bottom: 28px; }
+.login-logo { font-size: 36px; margin-bottom: 12px; }
+.login-title {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.login-title span { color: var(--accent); }
+.login-subtitle { font-size: 12px; color: var(--text3); font-family: var(--font-mono); letter-spacing: 1px; }
 
-  /* ── KM Panel ── */
-  #km-panel { display: none; flex: 1; overflow-y: auto; padding: 24px; }
-  .km-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; max-width: 600px; }
-  .km-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-  .key-pool-bar { background: var(--bg3); border-radius: 4px; height: 8px; margin: 8px 0; overflow: hidden; }
-  .key-pool-fill { height: 100%; border-radius: 4px; background: var(--success); transition: width .4s; }
-  .key-pool-fill.warn { background: var(--warn); }
-  .key-pool-fill.crit { background: var(--danger); }
-  .stat-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin: 4px 0; }
-  .stat-val { color: var(--text); font-weight: 500; }
-  .demo-box { background: var(--bg3); border-radius: 8px; padding: 14px; margin-top: 12px; }
-  .demo-box pre { font-size: 11px; color: var(--accent2); overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-family: 'Courier New', monospace; }
+/* ══ INBOX VIEW ══ */
+.inbox-toolbar {
+  padding: 14px 20px;
+  display: flex; align-items: center; gap: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.msg-list { flex: 1; overflow-y: auto; }
+.msg-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+.msg-item:hover { background: var(--surface2); }
+.msg-item.unread .msg-subject { font-weight: 600; color: var(--text); }
+.msg-item.unread::before {
+  content: '';
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+}
+.msg-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+  background: var(--surface3);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.msg-meta { flex: 1; overflow: hidden; }
+.msg-from { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-subject { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.msg-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.msg-time { font-size: 11px; color: var(--text3); font-family: var(--font-mono); }
 
-  /* ── Spinner ── */
-  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 20px; }
+/* ── Level badges ── */
+.level-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: 1px solid;
+}
+.level-1 { color: var(--red); border-color: var(--red); background: rgba(255,77,109,0.08); }
+.level-2 { color: var(--blue); border-color: var(--blue); background: rgba(77,166,255,0.08); }
+.level-3 { color: var(--purple); border-color: var(--purple); background: rgba(179,136,255,0.08); }
+.level-4 { color: var(--text3); border-color: var(--text3); background: transparent; }
 
-  select option { background: var(--bg2); }
+/* ══ COMPOSE VIEW ══ */
+.compose-wrap {
+  padding: 20px;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+}
+.compose-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.compose-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.compose-title { font-family: var(--font-mono); font-size: 13px; color: var(--text); }
+.field-row {
+  display: flex; align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+}
+.field-label {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text3);
+  width: 60px;
+  flex-shrink: 0;
+}
+.field-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 0 0 0 8px;
+}
+.body-area {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 16px 20px;
+  resize: none;
+  min-height: 200px;
+  line-height: 1.6;
+}
+.level-selector {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.level-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-body);
+  text-align: left;
+  color: var(--text2);
+}
+.level-btn:hover { border-color: var(--border2); background: var(--surface2); }
+.level-btn.selected { border-color: currentColor; }
+.level-btn.l1 { color: var(--red); }
+.level-btn.l1.selected { background: rgba(255,77,109,0.08); }
+.level-btn.l2 { color: var(--blue); }
+.level-btn.l2.selected { background: rgba(77,166,255,0.08); }
+.level-btn.l3 { color: var(--purple); }
+.level-btn.l3.selected { background: rgba(179,136,255,0.08); }
+.level-btn .lbl-icon { font-size: 18px; }
+.level-btn .lbl-name { font-size: 12px; font-weight: 600; }
+.level-btn .lbl-desc { font-size: 10px; color: var(--text3); }
 
-  /* ── File input (compose) ── */
-  .file-input-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg3); border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--muted); transition: all .2s; }
-  .file-input-label:hover { border-color: var(--accent); color: var(--text); }
-  input[type="file"] { display: none; }
-  .file-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .file-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; font-size: 11px; color: var(--muted); }
+.attach-zone {
+  margin: 0 20px 14px;
+  border: 1px dashed var(--border2);
+  border-radius: var(--r);
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  color: var(--text3);
+  font-size: 12px;
+}
+.attach-zone:hover, .attach-zone.drag { border-color: var(--accent); color: var(--accent); }
+.attach-list { padding: 0 20px 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.attach-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text2);
+}
+.attach-chip button { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 12px; padding: 0; }
 
-  /* ── Attachment download bar (detail view) ── */
-  .attachments-bar { padding: 10px 20px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
-  .attachment-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--accent2); text-decoration: none; transition: border-color .15s, background .15s; }
-  .attachment-chip:hover { border-color: var(--accent2); background: #1a2e2e; }
-  .attachment-size { font-size: 10px; color: var(--muted); }
+.compose-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.encrypt-preview {
+  flex: 1;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text3);
+}
+.encrypt-preview .ep-size { color: var(--accent); font-weight: 700; }
+
+/* ══ READ VIEW ══ */
+.read-wrap {
+  padding: 20px;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+}
+.read-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+}
+.read-header { padding: 20px; border-bottom: 1px solid var(--border); }
+.read-subject { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+.read-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.read-from { font-size: 13px; color: var(--text2); }
+.read-time { font-size: 11px; font-family: var(--font-mono); color: var(--text3); }
+.read-body { padding: 20px; font-size: 14px; line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.read-locked {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text3);
+}
+.read-locked .lock-icon { font-size: 40px; margin-bottom: 12px; }
+.read-locked p { font-size: 13px; margin-bottom: 16px; }
+.read-attachments { padding: 0 20px 20px; }
+.attach-download {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.attach-download:hover { border-color: var(--accent); }
+.attach-download .ad-name { font-size: 13px; color: var(--text); font-family: var(--font-mono); }
+.attach-download .ad-size { font-size: 11px; color: var(--text3); }
+.attach-download .ad-dl { margin-left: auto; color: var(--accent); font-size: 16px; }
+
+/* ══ AUDIT VIEW ══ */
+.audit-wrap { padding: 20px; }
+.audit-header { margin-bottom: 16px; }
+.audit-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--font-mono); }
+.audit-table th {
+  text-align: left; padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text3);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.audit-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+.audit-table tr:hover td { background: var(--surface2); }
+.op-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.op-encrypt { background: rgba(0,212,170,0.1); color: var(--accent); }
+.op-decrypt { background: rgba(77,166,255,0.1); color: var(--blue); }
+.op-send { background: rgba(255,209,102,0.1); color: var(--gold); }
+.success-y { color: var(--accent); }
+.success-n { color: var(--red); }
+
+/* ══ SETTINGS VIEW ══ */
+.settings-wrap { padding: 24px; max-width: 600px; }
+.settings-section { margin-bottom: 28px; }
+.settings-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--text3); margin-bottom: 12px; }
+.settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row-label { font-size: 13px; color: var(--text); }
+.settings-row-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* ══ SHARED COMPONENTS ══ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: var(--bg); }
+.btn-primary:hover { background: var(--accent2); }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+.btn-ghost:hover { border-color: var(--border2); color: var(--text); background: var(--surface2); }
+.btn-danger { background: transparent; border: 1px solid var(--red); color: var(--red); }
+.btn-danger:hover { background: rgba(255,77,109,0.1); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 9px 12px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text3); }
+
+.select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-label { font-size: 11px; font-family: var(--font-mono); color: var(--text3); margin-bottom: 6px; display: block; letter-spacing: 0.5px; }
+
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  padding: 12px 16px;
+  border-radius: var(--r);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid;
+  animation: slideIn 0.2s ease;
+  max-width: 320px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+.toast-success { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+.toast-error { background: var(--surface2); border-color: var(--red); color: var(--red); }
+.toast-warn { background: var(--surface2); border-color: var(--gold); color: var(--gold); }
+.toast-info { background: var(--surface2); border-color: var(--blue); color: var(--blue); }
+@keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
+.empty-state .es-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state p { font-size: 13px; }
+
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 24px; width: 400px; max-width: 94vw; }
+.modal-title { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+.progress-bar { height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+.crypto-banner {
+  padding: 10px 14px;
+  border-radius: var(--r);
+  border: 1px solid;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  margin: 0 20px 14px;
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.crypto-banner.info { border-color: var(--blue); color: var(--blue); background: rgba(77,166,255,0.06); }
+.crypto-banner.warn { border-color: var(--gold); color: var(--gold); background: rgba(255,209,102,0.06); }
+.crypto-banner.ok { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.06); }
+
+.hidden { display: none !important; }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════
-     LOGIN SCREEN
-═══════════════════════════════════════════════ -->
-<div id="login-screen">
-  <div class="login-card">
-    <h2>🔐 QuMail</h2>
-    <p>Quantum Secure Email Client &mdash; ETSI QKD 014</p>
-    
-    <div class="error-msg" id="login-error"></div>
-
-    <div class="form-group">
-      <label>Email address</label>
-      <input type="email" id="login-email" placeholder="you@gmail.com" value="">
-    </div>
-    <div class="form-group">
-      <label>App password</label>
-      <input type="password" id="login-pass" placeholder="Gmail App Password">
-      <div class="hint">Gmail: Settings → Security → App Passwords</div>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="form-group">
-      <label>Your SAE ID (KM identity)</label>
-      <input type="text" id="login-sae" placeholder="e.g. alice@qkd" value="alice@qkd">
-    </div>
-    <div class="form-group">
-      <label>Peer SAE ID</label>
-      <input type="text" id="login-peer-sae" placeholder="e.g. bob@qkd" value="bob@qkd">
-      <div class="hint">Must match recipient's SAE ID in their QuMail</div>
-    </div>
-
-    <button class="btn btn-primary" style="width:100%;padding:10px;font-size:15px;margin-top:8px" onclick="doLogin()">
-      Connect &amp; Open Inbox
-    </button>
-
-    <div class="divider"></div>
-    <div style="font-size:11px;color:var(--muted);text-align:center">
-      Demo mode: KM simulator runs on same server. No real QKD hardware needed.
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">🔐</div>
+    <div>
+      <div class="logo-text">Qu<span>Mail</span></div>
+      <div class="logo-sub">v2 · Quantum Secure</div>
     </div>
   </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════
-     MAIN APP (hidden until login)
-═══════════════════════════════════════════════ -->
-<header id="app-header" style="display:none">
-  <div class="logo">Qu<span>Mail</span></div>
-  <div class="header-right">
-    <span id="km-status-badge" class="km-badge">KM: checking...</span>
-    <span id="header-user" style="font-size:13px;color:var(--muted)"></span>
-    <button class="btn btn-outline btn-sm" onclick="doLogout()">Logout</button>
-  </div>
-</header>
-
-<div class="app" id="main-app" style="display:none">
-
-  <!-- Sidebar -->
-  <aside>
-    <button class="btn btn-primary compose-btn" onclick="showPanel('compose')">✏️ Compose</button>
-    <button class="nav-btn active" id="nav-inbox" onclick="showPanel('inbox')">
+  <nav class="nav" id="nav">
+    <div class="nav-item active" data-view="inbox">
       <span class="nav-icon">📥</span> Inbox
-    </button>
-    <button class="nav-btn" id="nav-km" onclick="showPanel('km')">
-      <span class="nav-icon">🔑</span> Key Manager
-    </button>
-    <div class="sidebar-bottom">
-      <div class="user-info" id="sidebar-user"></div>
+      <span class="nav-badge hidden" id="inbox-count">0</span>
     </div>
-  </aside>
-
-  <main>
-
-    <!-- INBOX panel -->
-    <div id="inbox-panel">
-      <div style="width:340px;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0">
-        <div class="panel-header">
-          <h3>Inbox</h3>
-          <button class="btn btn-outline btn-sm" onclick="loadInbox()" style="margin-left:auto">↻ Refresh</button>
-        </div>
-        <div class="email-list" id="email-list">
-          <div class="loading"><span class="spin"></span> Loading emails...</div>
-        </div>
-      </div>
-      <div id="detail-panel">
-        <div id="detail-placeholder" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px">
-  Select an email to read
-</div>
+    <div class="nav-item" data-view="compose">
+      <span class="nav-icon">✏️</span> Compose
+    </div>
+    <div class="nav-item" data-view="audit">
+      <span class="nav-icon">📋</span> Audit Log
+    </div>
+    <div class="nav-item" data-view="settings">
+      <span class="nav-icon">⚙️</span> Settings
+    </div>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="user-pill" id="user-pill">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <div class="user-info">
+        <div class="user-email" id="user-email">Not logged in</div>
+        <div class="user-sae" id="user-sae">—</div>
       </div>
     </div>
+  </div>
+</aside>
 
-    <!-- COMPOSE panel -->
-    <div id="compose-panel">
-      <div class="compose-card">
-        <div class="compose-header">New Message</div>
-        <div class="compose-body">
-          <div class="form-group">
-            <label>To</label>
-            <input type="email" id="compose-to" placeholder="recipient@gmail.com">
+<!-- ── Main ── -->
+<main class="main">
+  <div class="topbar">
+    <span class="topbar-title" id="topbar-title"><strong>Inbox</strong></span>
+    <div class="topbar-right">
+      <div class="km-status-pill" id="km-pill" onclick="showKmStatus()">
+        <div class="status-dot"></div>
+        <span id="km-text">KM: —</span>
+      </div>
+      <button class="btn btn-ghost" id="btn-logout" onclick="logout()" style="font-size:12px;padding:6px 12px;">Logout</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- LOGIN -->
+    <div class="view active" id="view-login">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="login-logo">🔐</div>
+          <div class="login-title">Qu<span>Mail</span> v2</div>
+          <div class="login-subtitle">QUANTUM-SECURE EMAIL SYSTEM</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">EMAIL ADDRESS</label>
+          <input class="input" type="email" id="login-email" placeholder="you@gmail.com" autocomplete="email"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">APP PASSWORD</label>
+          <input class="input" type="password" id="login-pass" placeholder="••••••••••••••••" autocomplete="current-password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SAE NODE ID</label>
+          <input class="input" type="text" id="login-sae" placeholder="SAE-NODE-001" value="SAE-NODE-001"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SLAVE SAE ID (recipient's node)</label>
+          <input class="input" type="text" id="login-slave-sae" placeholder="SAE-NODE-002" value="SAE-NODE-002"/>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px;" onclick="login()">
+          <span id="login-spinner" class="spinner hidden"></span>
+          <span id="login-label">Connect to QuMail</span>
+        </button>
+        <p style="font-size:10px;color:var(--text3);text-align:center;margin-top:12px;font-family:var(--font-mono);">
+          Gmail: use App Password (16-char). Yahoo/Outlook: use regular password or App Password.
+        </p>
+      </div>
+    </div>
+
+    <!-- INBOX -->
+    <div class="view" id="view-inbox">
+      <div class="inbox-toolbar">
+        <button class="btn btn-primary" onclick="showView('compose')" style="font-size:12px;padding:7px 14px;">✏️ Compose</button>
+        <button class="btn btn-ghost" onclick="loadInbox()" style="font-size:12px;padding:7px 12px;">↻ Refresh</button>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-left:auto;" id="inbox-status"></span>
+      </div>
+      <div class="msg-list" id="msg-list">
+        <div class="empty-state">
+          <div class="es-icon">📭</div>
+          <p>Loading inbox…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPOSE -->
+    <div class="view" id="view-compose" style="overflow-y:auto;">
+      <div class="compose-wrap">
+        <div class="compose-card">
+          <div class="compose-header">
+            <span class="compose-title">🔏 New Encrypted Message</span>
+            <select class="select" id="slave-sae-compose" title="Recipient SAE Node"></select>
           </div>
-          <div class="form-group">
-            <label>Recipient SAE ID</label>
-            <input type="text" id="compose-peer-sae" placeholder="bob@qkd">
+          <div class="field-row">
+            <span class="field-label">To:</span>
+            <input class="field-input" type="email" id="c-to" placeholder="recipient@example.com"/>
           </div>
-          <div class="form-group">
-            <label>Subject</label>
-            <input type="text" id="compose-subject" placeholder="Subject">
+          <div class="field-row">
+            <span class="field-label">Subject:</span>
+            <input class="field-input" type="text" id="c-subject" placeholder="Subject (sent in plaintext)"/>
           </div>
-          <div class="form-group">
-            <label>Security Level</label>
-            <div class="security-selector">
-              <div class="sec-opt selected" data-level="1" onclick="selectLevel(1)">
-                <div class="sec-opt-title" style="color:var(--l1)">🔮 Level 1 — OTP</div>
-                <div class="sec-opt-desc">Quantum Secure · One-Time Pad · Unconditional</div>
+          <textarea class="body-area" id="c-body" placeholder="Write your message…" oninput="updateEncryptPreview()"></textarea>
+
+          <div class="level-selector">
+            <button class="level-btn l1" data-level="1" onclick="selectLevel(1)">
+              <span class="lbl-icon">🔴</span>
+              <div><div class="lbl-name">L1 · OTP</div><div class="lbl-desc">Unconditional</div></div>
+            </button>
+            <button class="level-btn l2 selected" data-level="2" onclick="selectLevel(2)">
+              <span class="lbl-icon">🔵</span>
+              <div><div class="lbl-name">L2 · QAES ★</div><div class="lbl-desc">Recommended</div></div>
+            </button>
+            <button class="level-btn l3" data-level="3" onclick="selectLevel(3)">
+              <span class="lbl-icon">🟣</span>
+              <div><div class="lbl-name">L3 · Kyber-768</div><div class="lbl-desc">Post-Quantum</div></div>
+            </button>
+          </div>
+
+          <div id="level-banner"></div>
+
+          <div class="attach-zone" id="attach-zone"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="handleDrop(event)"
+               onclick="document.getElementById('attach-input').click()">
+            📎 Drag &amp; drop files or click to attach
+          </div>
+          <input type="file" id="attach-input" multiple hidden onchange="handleFileSelect(event)"/>
+          <div class="attach-list" id="attach-list"></div>
+
+          <div class="compose-footer">
+            <div class="encrypt-preview" id="encrypt-preview">
+              Select level and write a message to preview encrypted size
+            </div>
+            <button class="btn btn-ghost" onclick="encryptPreview()" style="font-size:12px;">🔍 Preview</button>
+            <button class="btn btn-primary" id="send-btn" onclick="sendEmail()">
+              <span id="send-spinner" class="spinner hidden"></span>
+              🚀 Encrypt &amp; Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- READ -->
+    <div class="view" id="view-read" style="overflow-y:auto;">
+      <div class="read-wrap">
+        <div style="margin-bottom:12px;">
+          <button class="btn btn-ghost" onclick="showView('inbox')" style="font-size:12px;">← Back to Inbox</button>
+        </div>
+        <div class="read-card" id="read-card">
+          <div class="read-header">
+            <div class="read-subject" id="read-subject">Loading…</div>
+            <div class="read-meta">
+              <span class="read-from" id="read-from"></span>
+              <span class="read-time" id="read-time"></span>
+              <span id="read-level-badge"></span>
+            </div>
+          </div>
+          <div id="read-body-container" class="read-body">
+            <div class="read-locked" id="read-locked">
+              <div class="lock-icon">🔒</div>
+              <p>This message is encrypted. Enter your credentials to decrypt.</p>
+              <div style="max-width:300px;margin:0 auto;">
+                <div class="form-group">
+                  <label class="form-label">YOUR EMAIL</label>
+                  <input class="input" type="email" id="dec-email"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">APP PASSWORD</label>
+                  <input class="input" type="password" id="dec-pass"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">YOUR SAE ID</label>
+                  <input class="input" type="text" id="dec-sae"/>
+                </div>
+                <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="decryptMessage()">
+                  <span id="dec-spinner" class="spinner hidden"></span>
+                  🔓 Decrypt Message
+                </button>
               </div>
-              <div class="sec-opt" data-level="2" onclick="selectLevel(2)">
-                <div class="sec-opt-title" style="color:var(--l2)">⚛️ Level 2 — Q-AES</div>
-                <div class="sec-opt-desc">Quantum-seeded AES-256-GCM · Large files OK</div>
-              </div>
-              <div class="sec-opt" data-level="3" onclick="selectLevel(3)">
-                <div class="sec-opt-title" style="color:var(--l3)">🔒 Level 3 — AES</div>
-                <div class="sec-opt-desc">Standard AES-256-GCM · No quantum key needed</div>
-              </div>
-              <div class="sec-opt" data-level="4" onclick="selectLevel(4)">
-                <div class="sec-opt-title" style="color:var(--l4)">📭 Level 4 — Plain</div>
-                <div class="sec-opt-desc">No encryption · Baseline comparison</div>
+            </div>
+            <div id="read-body-text" class="hidden"></div>
+          </div>
+          <div id="read-attachments" class="read-attachments hidden"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDIT -->
+    <div class="view" id="view-audit" style="overflow-y:auto;">
+      <div class="audit-wrap">
+        <div class="audit-header" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text);">📋 Audit Log</span>
+          <button class="btn btn-ghost" onclick="loadAudit()" style="font-size:11px;padding:5px 10px;">↻ Refresh</button>
+        </div>
+        <div id="audit-content">
+          <div class="empty-state"><div class="es-icon">📋</div><p>Loading audit log…</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="view" id="view-settings" style="overflow-y:auto;">
+      <div class="settings-wrap">
+        <div class="settings-section">
+          <div class="settings-title">Account</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div><div class="settings-row-label">Email</div><div class="settings-row-desc" id="set-email">—</div></div>
+            </div>
+            <div class="settings-row">
+              <div><div class="settings-row-label">SAE Node ID</div><div class="settings-row-desc" id="set-sae">—</div></div>
+            </div>
+            <div class="settings-row">
+              <div><div class="settings-row-label">Email Provider</div><div class="settings-row-desc" id="set-provider">—</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">Key Manager Status</div>
+          <div class="settings-card" id="km-status-card">
+            <div class="settings-row"><div><div class="settings-row-label">Pool Size</div><div class="settings-row-desc" id="km-pool">—</div></div></div>
+            <div class="settings-row"><div><div class="settings-row-label">Available Keys</div><div class="settings-row-desc" id="km-avail">—</div></div></div>
+            <div class="settings-row">
+              <div style="width:100%">
+                <div class="settings-row-label" style="margin-bottom:6px;">Key Pool</div>
+                <div class="progress-bar">
+                  <div class="progress-fill" id="km-bar" style="width:0%;background:var(--accent)"></div>
+                </div>
               </div>
             </div>
           </div>
-          <div class="form-group">
-            <label>Message</label>
-            <textarea id="compose-body" rows="8" placeholder="Write your message here..."></textarea>
-          </div>
-          <div class="form-group">
-            <label>Attachments <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— encrypted with message</span></label>
-            <label class="file-input-label" for="compose-files">
-              <span>📎</span>
-              <span id="file-label-text">Choose files to attach…</span>
-            </label>
-            <input type="file" id="compose-files" multiple onchange="updateFileChips()">
-            <div class="file-chips" id="file-chips"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">Security</div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div><div class="settings-row-label">Kyber-768 (liboqs)</div><div class="settings-row-desc" id="kyber-status">Checking…</div></div>
+              <span id="kyber-badge"></span>
+            </div>
+            <div class="settings-row">
+              <div><div class="settings-row-label">Level 4 Debug Mode</div><div class="settings-row-desc">Plaintext (no encryption)</div></div>
+              <span id="l4-status" style="font-size:11px;font-family:var(--font-mono);color:var(--red);">DISABLED</span>
+            </div>
           </div>
         </div>
-        <div class="compose-footer">
-          <button class="btn btn-primary" onclick="sendEmail()">Send Secure</button>
-          <button class="btn btn-outline btn-sm" onclick="previewEncryption()">Preview encryption</button>
-          <div id="send-result"></div>
-        </div>
-      </div>
-      <!-- Encryption preview -->
-      <div id="enc-preview" style="display:none;margin-top:16px;max-width:680px">
-        <div class="km-card">
-          <h4>Encryption preview — what the wire sees</h4>
-          <div class="demo-box"><pre id="enc-preview-text"></pre></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- KM PANEL -->
-    <div id="km-panel">
-      <div style="max-width:600px">
-        <h3 style="font-size:18px;font-weight:600;margin-bottom:20px">Key Manager — ETSI QKD 014 Simulator</h3>
-
-        <div class="km-card">
-          <h4>Key Pool Status</h4>
-          <div id="km-pool-info">
-            <div class="loading"><span class="spin"></span> Fetching status...</div>
+        <div class="settings-section">
+          <div class="settings-title">Demo Tools</div>
+          <div class="settings-card">
+            <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
+              <div class="settings-row-label">Inject demo encrypted email into inbox</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-ghost" onclick="injectDemo(1)" style="font-size:11px;">🔴 L1 OTP Demo</button>
+                <button class="btn btn-ghost" onclick="injectDemo(2)" style="font-size:11px;">🔵 L2 QAES Demo</button>
+                <button class="btn btn-ghost" onclick="injectDemo(3)" style="font-size:11px;">🟣 L3 Kyber Demo</button>
+              </div>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn btn-outline btn-sm" onclick="loadKMStatus()">↻ Refresh</button>
-            <button class="btn btn-primary btn-sm" onclick="refillKeys()">Refill Pool (new QKD session)</button>
-          </div>
-        </div>
-
-        <div class="km-card">
-          <h4>Live Encryption Demo</h4>
-          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            Type a message and see exactly what an attacker on the wire would intercept.
-          </p>
-          <div class="form-group">
-            <label>Plaintext</label>
-            <input type="text" id="demo-text" value="Top secret: meet at midnight" placeholder="Enter message">
-          </div>
-          <div class="form-group">
-            <label>Level</label>
-            <select id="demo-level">
-              <option value="1">Level 1 — OTP (Quantum Secure)</option>
-              <option value="2" selected>Level 2 — Quantum-seeded AES</option>
-              <option value="3">Level 3 — AES-256-GCM</option>
-              <option value="4">Level 4 — No encryption</option>
-            </select>
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="runLiveDemo()">Encrypt &amp; show wire payload</button>
-          <div id="live-demo-result" style="margin-top:10px"></div>
-        </div>
-
-        <div class="km-card">
-          <h4>About the Key Manager</h4>
-          <p style="font-size:13px;color:var(--muted);line-height:1.6">
-            This simulator implements the <strong style="color:var(--text)">ETSI GS QKD 014</strong> REST API. 
-            Each Alice–Bob pair shares a pre-generated pool of <strong style="color:var(--text)">256-bit symmetric keys</strong>. 
-            In production, this module is swapped for a real QKD network — the application interface is identical.
-            Key IDs are embedded in <code style="color:var(--accent2)">X-QKD-KeyID</code> email headers; the key material never leaves the KM.
-          </p>
         </div>
       </div>
     </div>
 
-  </main>
+  </div><!-- /content -->
+</main>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- KM Modal -->
+<div class="modal-bg hidden" id="km-modal" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="modal">
+    <div class="modal-title">⚡ Key Manager Status</div>
+    <div id="km-modal-content" style="font-family:var(--font-mono);font-size:12px;color:var(--text2);">Loading…</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('km-modal').classList.add('hidden')">Close</button>
+    </div>
+  </div>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
-const S = {
-  email: '', password: '', saeId: '', peerSaeId: '',
-  emails: [], selectedEmail: null, selectedLevel: 1,
+const API = '';
+let STATE = {
+  token: null,
+  email: null,
+  sae_id: null,
+  slave_sae: null,
+  password: null, // stored in memory only
+  provider: null,
+  selectedLevel: 2,
+  attachments: [],     // [{filename, data_b64, mime_type, size}]
+  currentMsgId: null,
+  currentMsg: null,
+  inbox: []
 };
+
+// IndexedDB cache
+let idb = null;
+async function openIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('qumail', 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('session')) db.createObjectStore('session');
+      if (!db.objectStoreNames.contains('emails')) db.createObjectStore('emails', {keyPath:'id'});
+    };
+    req.onsuccess = e => res(e.target.result);
+    req.onerror = () => rej();
+  });
+}
+async function idbSet(store, key, val) { try { const tx = idb.transaction(store,'readwrite'); tx.objectStore(store).put(val,key); } catch{} }
+async function idbGet(store, key) { return new Promise(res => { try { const tx = idb.transaction(store,'readonly'); const req = tx.objectStore(store).get(key); req.onsuccess = e => res(e.target.result); req.onerror = () => res(null); } catch{ res(null); } }); }
 
 // ═══════════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════════
-async function doLogin() {
+async function login() {
   const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  const sae = document.getElementById('login-sae').value.trim();
-  const peer = document.getElementById('login-peer-sae').value.trim();
-  const err = document.getElementById('login-error');
-  err.style.display = 'none';
+  const pass  = document.getElementById('login-pass').value;
+  const sae   = document.getElementById('login-sae').value.trim();
+  const slave = document.getElementById('login-slave-sae').value.trim();
+  if (!email || !pass || !sae) return toast('Fill in all fields', 'error');
 
-  if (!email || !pass || !sae) {
-    err.textContent = 'Email, password, and SAE ID are required.';
-    err.style.display = 'block';
+  setLoading('login-spinner','login-label',true,'Connecting…');
+  try {
+    const res = await apiFetch('/api/login', {method:'POST',body:{email,password:pass,sae_id:sae}});
+    STATE.token    = res.token;
+    STATE.email    = email;
+    STATE.sae_id   = sae;
+    STATE.slave_sae = slave;
+    STATE.password = pass;
+    STATE.provider = detectProvider(email);
+    await idbSet('session','auth',{token:res.token,email,sae_id:sae,slave_sae:slave,provider:STATE.provider,ts:Date.now()});
+    onLoggedIn();
+  } catch(e) {
+    toast(e.message||'Login failed','error');
+  }
+  setLoading('login-spinner','login-label',false,'Connect to QuMail');
+}
+
+function detectProvider(email) {
+  const d = email.split('@')[1]?.toLowerCase()||'';
+  if (d.includes('gmail')) return 'Gmail';
+  if (d.includes('yahoo')||d.includes('ymail')) return 'Yahoo';
+  if (d.includes('outlook')||d.includes('hotmail')||d.includes('live')) return 'Outlook';
+  return 'Unknown';
+}
+
+async function onLoggedIn() {
+  document.getElementById('user-email').textContent = STATE.email;
+  document.getElementById('user-sae').textContent   = STATE.sae_id;
+  document.getElementById('user-avatar').textContent = STATE.email[0].toUpperCase();
+  document.getElementById('set-email').textContent   = STATE.email;
+  document.getElementById('set-sae').textContent     = STATE.sae_id;
+  document.getElementById('set-provider').textContent = STATE.provider;
+  document.getElementById('slave-sae-compose').innerHTML =
+    `<option value="${STATE.slave_sae}">${STATE.slave_sae}</option>`;
+  // Pre-fill decrypt fields
+  document.getElementById('dec-email').value = STATE.email;
+  document.getElementById('dec-sae').value   = STATE.sae_id;
+
+  showView('inbox');
+  await loadInbox();
+  await refreshKmStatus();
+  checkKyberStatus();
+}
+
+function logout() {
+  STATE = {token:null,email:null,sae_id:null,slave_sae:null,password:null,provider:null,selectedLevel:2,attachments:[],inbox:[]};
+  idbSet('session','auth',null);
+  showView('login-raw');
+  document.getElementById('view-login').style.display = '';
+}
+
+async function tryRestoreSession() {
+  idb = await openIDB();
+  const saved = await idbGet('session','auth');
+  if (saved && saved.token && (Date.now()-saved.ts) < 14*60*1000) {
+    STATE.token    = saved.token;
+    STATE.email    = saved.email;
+    STATE.sae_id   = saved.sae_id;
+    STATE.slave_sae = saved.slave_sae;
+    STATE.provider = saved.provider;
+    return true;
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+const TITLES = {inbox:'Inbox',compose:'Compose',audit:'Audit Log',settings:'Settings',read:'Reading Message'};
+
+function showView(name) {
+  if (name === 'login-raw') {
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-login').classList.add('active');
     return;
   }
-
-  S.email = email; S.password = pass; S.saeId = sae; S.peerSaeId = peer;
-  document.getElementById('header-user').textContent = email;
-  document.getElementById('sidebar-user').textContent = `${email}\nSAE: ${sae}`;
-  document.getElementById('compose-peer-sae').value = peer;
-
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-header').style.display = '';
-  document.getElementById('main-app').style.display = '';
-
-  showPanel('inbox');
-  loadInbox();
-  pollKMStatus();
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const view = document.getElementById('view-'+name);
+  if (view) view.classList.add('active');
+  const nav = document.querySelector(`.nav-item[data-view="${name}"]`);
+  if (nav) nav.classList.add('active');
+  document.getElementById('topbar-title').innerHTML = `<strong>${TITLES[name]||name}</strong>`;
+  if (name==='audit') loadAudit();
+  if (name==='settings') loadSettingsKm();
 }
 
-function doLogout() {
-  Object.assign(S, { email:'', password:'', saeId:'', peerSaeId:'', emails:[], selectedEmail:null });
-  document.getElementById('login-screen').style.display = '';
-  document.getElementById('app-header').style.display = 'none';
-  document.getElementById('main-app').style.display = 'none';
-}
-
-// ═══════════════════════════════════════════════
-// PANELS
-// ═══════════════════════════════════════════════
-function showPanel(name) {
-  ['inbox','compose','km'].forEach(p => {
-    const el = document.getElementById(p + '-panel');
-    if (!el) return;
-
-    el.style.display = 'none';
-
-    const nav = document.getElementById('nav-' + p);
-    if (nav) nav.className = 'nav-btn';
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    if (!STATE.token) return;
+    showView(el.dataset.view);
   });
+});
 
-  const active = document.getElementById(name + '-panel');
-
-  if (name === 'inbox') {
-    active.style.display = 'flex';
-  } else {
-    active.style.display = 'block';
-  }
-
-  const navActive = document.getElementById('nav-' + name);
-  if (navActive) navActive.className = 'nav-btn active';
-
-  if (name === 'km') loadKMStatus();
-}
 // ═══════════════════════════════════════════════
 // INBOX
 // ═══════════════════════════════════════════════
 async function loadInbox() {
-  document.getElementById('email-list').innerHTML = '<div class="loading"><span class="spin"></span> Fetching emails...</div>';
+  if (!STATE.token) return;
+  document.getElementById('inbox-status').textContent = 'Refreshing…';
   try {
-    const r = await api('/api/email/fetch', 'POST', { email: S.email, password: S.password, limit: 20 });
-    S.emails = r.emails || [];
-    renderEmailList();
-  } catch(e) {
-    document.getElementById('email-list').innerHTML = `<div style="padding:20px;color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
-  }
-}
-
-function renderEmailList() {
-  const list = document.getElementById('email-list');
-  if (!S.emails.length) { list.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">No emails found</div>'; return; }
-  if (S.emails[0]?.error) { list.innerHTML = `<div style="padding:20px;color:var(--danger);font-size:13px">IMAP error: ${S.emails[0].error}</div>`; return; }
-
-  list.innerHTML = S.emails.map((em, i) => {
-    const lvl = em.qkd_level || 4;
-    const pill = em.is_qumail ? `<span class="sec-pill sec-${lvl}">L${lvl}</span>` : '';
-    const from = em.from.replace(/<.*>/, '').trim() || em.from;
-    return `<div class="email-row" onclick="openEmail(${i})">
-      <div class="email-meta">
-        <div class="email-from">${esc(from)}</div>
-        <div class="email-subj">${esc(em.subject)}</div>
-      </div>
-      ${pill}
-      <div class="email-date">${formatDate(em.date)}</div>
-    </div>`;
-  }).join('');
-}
-
-async function openEmail(idx) {
-  document.getElementById('detail-placeholder') && 
-  (document.getElementById('detail-placeholder').style.display = 'none');
-  S.selectedEmail = idx;
-
-  document.querySelectorAll('.email-row').forEach((r,i) => {
-    r.className = 'email-row' + (i === idx ? ' selected' : '');
-  });
-
-  const em = S.emails[idx];
-  const detail = document.getElementById('detail-panel');
-
-  // 👇 IMPORTANT: force panel visible
-  detail.style.display = 'flex';
-
-  const lvlNames = {
-    1:'OTP — Quantum Secure',
-    2:'Quantum-seeded AES',
-    3:'AES-256-GCM',
-    4:'No encryption'
-  };
-
-  detail.innerHTML = `
-    <div class="detail-header">
-      <div class="detail-subject">${esc(em.subject)}</div>
-      <div class="detail-meta">
-        <span>From: ${esc(em.from)}</span>
-        <span>Date: ${esc(em.date)}</span>
-        ${em.is_qumail
-          ? `<span style="color:var(--accent)">QuMail — Level ${em.qkd_level}: ${lvlNames[em.qkd_level]}</span>`
-          : `<span style="color:var(--muted)">Standard email</span>`}
-      </div>
-    </div>
-
-    <div class="detail-body" id="email-body">
-      ${esc(em.body)}
-    </div>
-
-    <div id="email-attachments" class="attachments-bar" style="display:none"></div>
-
-    <div class="decrypt-bar">
-      ${em.is_qumail
-        ? `<button class="btn btn-primary btn-sm" onclick="decryptCurrent()">🔓 Decrypt</button>`
-        : `<span style="font-size:12px;color:var(--muted)">Not a QuMail message</span>`}
-      <div id="decrypt-status"></div>
-    </div>
-  `;
-}
-
-async function decryptCurrent() {
-  const em = S.emails[S.selectedEmail];
-  const status = document.getElementById('decrypt-status');
-  status.innerHTML = '<span class="spin"></span>';
-  try {
-    const r = await api('/api/email/decrypt', 'POST', {
-      encrypted_body: em.body,
-      qkd_key_id: em.qkd_key_id,
-      qkd_level: em.qkd_level,
-      qkd_sender_sae: em.qkd_sender_sae,
-      recipient_email: S.email,
-      recipient_password: S.password,
-      recipient_sae_id: S.saeId,
-    });
-    document.getElementById('email-body').textContent = r.plaintext;
-    status.innerHTML = `<span class="decrypt-status ok">✓ Decrypted — Level ${r.level}</span>`;
-
-    // Render decrypted attachments as download links
-    const bar = document.getElementById('email-attachments');
-    if (bar && r.attachments && r.attachments.length > 0) {
-      bar.style.display = 'flex';
-      bar.innerHTML =
-        `<span style="font-size:12px;color:var(--muted);flex-shrink:0;align-self:center">📎 Attachments:</span>` +
-        r.attachments.map(att =>
-          `<a class="attachment-chip"
-              href="data:${att.mime_type};base64,${att.data_b64}"
-              download="${esc(att.filename)}"
-              title="Download ${esc(att.filename)}">
-            📄 ${esc(att.filename)}
-            <span class="attachment-size">${formatBytes(att.size)}</span>
-          </a>`
-        ).join('');
+    const res = await apiFetch(`/api/email/inbox?limit=50`);
+    STATE.inbox = res.messages || [];
+    renderInbox();
+    const badge = document.getElementById('inbox-count');
+    if (STATE.inbox.length > 0) {
+      badge.textContent = STATE.inbox.length;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
     }
+    document.getElementById('inbox-status').textContent = `${STATE.inbox.length} messages`;
   } catch(e) {
-    status.innerHTML = `<span class="decrypt-status fail">✗ ${e.message}</span>`;
+    document.getElementById('inbox-status').textContent = 'Fetch failed';
+    toast('Inbox load failed: '+e.message,'error');
   }
+}
+
+function renderInbox() {
+  const el = document.getElementById('msg-list');
+  if (!STATE.inbox.length) {
+    el.innerHTML = `<div class="empty-state"><div class="es-icon">📭</div><p>No encrypted messages yet.<br>Compose one or inject a demo from Settings.</p></div>`;
+    return;
+  }
+  el.innerHTML = STATE.inbox.map(m => `
+    <div class="msg-item" onclick="openMessage('${m.id}','${escHtml(m.sender)}','${escHtml(m.subject)}',${m.level},'${m.timestamp}')">
+      <div class="msg-avatar" style="background:${avatarColor(m.sender)};color:#fff">${(m.sender||'?')[0].toUpperCase()}</div>
+      <div class="msg-meta">
+        <div class="msg-from">${escHtml(m.sender)}</div>
+        <div class="msg-subject">${escHtml(m.subject)}</div>
+      </div>
+      <div class="msg-right">
+        <span class="msg-time">${fmtTime(m.timestamp)}</span>
+        ${levelBadge(m.level)}
+        ${m.attachments_count>0?`<span style="font-size:10px;color:var(--text3)">📎 ${m.attachments_count}</span>`:''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function avatarColor(s) {
+  const colors = ['#e63946','#457b9d','#6d597a','#b5838d','#2a9d8f','#e9c46a','#3a86ff'];
+  let h = 0; for(let c of s||'') h = (h*31+c.charCodeAt(0))%colors.length;
+  return colors[h];
+}
+function levelBadge(l) {
+  const map = {1:'🔴 OTP',2:'🔵 QAES',3:'🟣 Kyber',4:'⬜ PLAIN'};
+  return `<span class="level-badge level-${l}">${map[l]||'?'}</span>`;
+}
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.toDateString()===now.toDateString()) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  return d.toLocaleDateString([],{month:'short',day:'numeric'});
+}
+function escHtml(s) { return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ═══════════════════════════════════════════════
+// READ + DECRYPT
+// ═══════════════════════════════════════════════
+function openMessage(id, sender, subject, level, ts) {
+  STATE.currentMsgId = id;
+  document.getElementById('read-subject').textContent = subject;
+  document.getElementById('read-from').textContent = 'From: '+sender;
+  document.getElementById('read-time').textContent = ts ? new Date(ts).toLocaleString() : '';
+  document.getElementById('read-level-badge').innerHTML = levelBadge(level);
+  document.getElementById('read-locked').classList.remove('hidden');
+  document.getElementById('read-body-text').classList.add('hidden');
+  document.getElementById('read-attachments').classList.add('hidden');
+  document.getElementById('dec-pass').value = STATE.password||'';
+  showView('read');
+}
+
+async function decryptMessage() {
+  const email = document.getElementById('dec-email').value.trim();
+  const pass  = document.getElementById('dec-pass').value;
+  const sae   = document.getElementById('dec-sae').value.trim();
+  if (!email||!pass||!sae) return toast('Enter credentials','error');
+
+  setLoading('dec-spinner',null,true);
+  try {
+    const res = await apiFetch('/api/email/decrypt',{method:'POST',body:{
+      msg_id: STATE.currentMsgId,
+      recipient_email: email,
+      recipient_password: pass,
+      recipient_sae_id: sae
+    }});
+    document.getElementById('read-locked').classList.add('hidden');
+    const bodyEl = document.getElementById('read-body-text');
+    bodyEl.innerHTML = `<div style="padding:20px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">${escHtml(res.body)}</div>`;
+    bodyEl.classList.remove('hidden');
+    if (res.attachments&&res.attachments.length>0) {
+      renderAttachments(res.attachments);
+    }
+    toast('✓ Decrypted successfully','success');
+    // Cache in IndexedDB
+    idbSet('emails', STATE.currentMsgId, {id:STATE.currentMsgId,body:res.body,attachments:res.attachments,ts:Date.now()});
+  } catch(e) {
+    toast('Decryption failed: '+e.message,'error');
+  }
+  setLoading('dec-spinner',null,false);
+}
+
+function renderAttachments(attachments) {
+  const el = document.getElementById('read-attachments');
+  el.classList.remove('hidden');
+  el.innerHTML = `<div style="font-size:11px;font-family:var(--font-mono);color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Attachments (${attachments.length})</div>` +
+    attachments.map(a => `
+      <div class="attach-download" onclick="downloadAttachment('${escHtml(a.filename)}','${a.data_b64}','${escHtml(a.mime_type)}')">
+        <span style="font-size:20px;">${fileIcon(a.mime_type)}</span>
+        <div>
+          <div class="ad-name">${escHtml(a.filename)}</div>
+          <div class="ad-size">${fmtSize(a.size)}</div>
+        </div>
+        <span class="ad-dl">⬇</span>
+      </div>
+    `).join('');
+}
+
+function downloadAttachment(filename, data_b64, mime_type) {
+  const bytes = Uint8Array.from(atob(data_b64), c => c.charCodeAt(0));
+  const blob = new Blob([bytes], {type: mime_type||'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function fileIcon(mime) {
+  if (!mime) return '📄';
+  if (mime.startsWith('image/')) return '🖼️';
+  if (mime.includes('pdf')) return '📕';
+  if (mime.includes('zip')||mime.includes('gz')) return '📦';
+  if (mime.includes('text')) return '📄';
+  if (mime.includes('video')) return '🎬';
+  if (mime.includes('audio')) return '🎵';
+  return '📎';
+}
+function fmtSize(n) {
+  if (!n) return '—';
+  if (n<1024) return n+' B';
+  if (n<1048576) return (n/1024).toFixed(1)+' KB';
+  return (n/1048576).toFixed(1)+' MB';
 }
 
 // ═══════════════════════════════════════════════
 // COMPOSE
 // ═══════════════════════════════════════════════
 function selectLevel(n) {
-  S.selectedLevel = n;
-  document.querySelectorAll('.sec-opt').forEach(el => {
-    el.className = 'sec-opt' + (parseInt(el.dataset.level) === n ? ' selected' : '');
-  });
-  document.getElementById('enc-preview').style.display = 'none';
+  STATE.selectedLevel = n;
+  document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`.level-btn[data-level="${n}"]`).classList.add('selected');
+  updateLevelBanner();
+  updateEncryptPreview();
 }
 
-// ── Attachment helpers ──
-function updateFileChips() {
-  const input = document.getElementById('compose-files');
-  const chips = document.getElementById('file-chips');
-  const n = input.files.length;
-  document.getElementById('file-label-text').textContent =
-    n === 0 ? 'Choose files to attach…' : `${n} file${n > 1 ? 's' : ''} selected`;
-  chips.innerHTML = Array.from(input.files).map(f =>
-    `<span class="file-chip">📎 ${esc(f.name)} <span style="color:var(--muted)">${formatBytes(f.size)}</span></span>`
-  ).join('');
+function updateLevelBanner() {
+  const el = document.getElementById('level-banner');
+  const msgs = {
+    1: ['warn','⚠ Level 1 OTP uses one key per byte. Large messages/attachments may exhaust the KM pool. Compressed automatically.'],
+    2: ['ok','✓ Level 2 QAES: 32-byte quantum seed → HKDF-SHA256 → AES-256-GCM. Recommended for all message sizes.'],
+    3: ['info','ℹ Level 3 Kyber-768 uses post-quantum key encapsulation. Withstands attacks from quantum computers.']
+  };
+  const [type, msg] = msgs[STATE.selectedLevel]||['info',''];
+  el.innerHTML = `<div class="crypto-banner ${type}">${msg}</div>`;
 }
 
-async function readFilesAsBase64(fileList) {
-  const results = [];
-  for (const file of fileList) {
-    const data_b64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    results.push({ filename: file.name, data_b64, mime_type: file.type || 'application/octet-stream', size: file.size });
-  }
-  return results;
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('attach-zone').classList.remove('drag');
+  [...e.dataTransfer.files].forEach(readFile);
+}
+function handleFileSelect(e) { [...e.target.files].forEach(readFile); }
+
+function readFile(file) {
+  if (file.size > 100*1024*1024) return toast('File too large (max 100MB)', 'error');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const b64 = reader.result.split(',')[1];
+    STATE.attachments.push({filename:file.name, data_b64:b64, mime_type:file.type||'application/octet-stream', size:file.size});
+    renderAttachList();
+    updateEncryptPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderAttachList() {
+  const el = document.getElementById('attach-list');
+  el.innerHTML = STATE.attachments.map((a,i) => `
+    <div class="attach-chip">
+      ${fileIcon(a.mime_type)} ${escHtml(a.filename)} (${fmtSize(a.size)})
+      <button onclick="removeAttach(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function removeAttach(i) { STATE.attachments.splice(i,1); renderAttachList(); updateEncryptPreview(); }
+
+function updateEncryptPreview() {
+  const body = document.getElementById('c-body').value;
+  const bytes = new TextEncoder().encode(body).length;
+  const attachBytes = STATE.attachments.reduce((s,a)=>s+a.size,0);
+  const total = bytes + attachBytes;
+  const lvlNames = {1:'OTP',2:'QAES-256-GCM',3:'Kyber-768+AES'};
+  document.getElementById('encrypt-preview').innerHTML =
+    `<span class="ep-size">${fmtSize(total)}</span> payload · Level ${STATE.selectedLevel} (${lvlNames[STATE.selectedLevel]||'?'})`;
+}
+
+async function encryptPreview() {
+  const body = document.getElementById('c-body').value;
+  if (!body) return toast('Write a message first','warn');
+  toast('Encrypting preview…','info');
+  try {
+    const res = await apiFetch('/api/email/encrypt',{method:'POST',body:{
+      body, attachments: STATE.attachments, level: STATE.selectedLevel,
+      master_sae: STATE.sae_id, slave_sae: STATE.slave_sae
+    }});
+    toast(`✓ Encrypted: ${fmtSize(res.size_bytes)} · KeyID: ${res.key_id.slice(0,12)}…`,'success');
+  } catch(e) { toast(e.message,'error'); }
 }
 
 async function sendEmail() {
-  const to = document.getElementById('compose-to').value.trim();
-  const peerSae = document.getElementById('compose-peer-sae').value.trim();
-  const subject = document.getElementById('compose-subject').value.trim();
-  const body = document.getElementById('compose-body').value;
-  const result = document.getElementById('send-result');
+  const to      = document.getElementById('c-to').value.trim();
+  const subject = document.getElementById('c-subject').value.trim();
+  const body    = document.getElementById('c-body').value;
+  if (!to||!body) return toast('Recipient and message required','error');
+  if (!subject) return toast('Subject cannot be empty','warn');
 
-  if (!to || !body) { result.innerHTML = '<span class="send-result fail">To and message body are required.</span>'; return; }
-
-  const filesEl = document.getElementById('compose-files');
-  result.innerHTML = filesEl.files.length
-    ? '<span class="spin"></span> Reading attachments…'
-    : '<span class="spin"></span>';
-
-  const attachments = await readFilesAsBase64(filesEl.files);
-  result.innerHTML = '<span class="spin"></span>';
+  setLoading('send-spinner','send-btn',true,'Encrypting…');
+  document.getElementById('send-btn').textContent = '';
 
   try {
-    const r = await api('/api/email/send', 'POST', {
-      sender_email: S.email, sender_password: S.password,
-      sender_sae_id: S.saeId, recipient_email: to,
-      recipient_sae_id: peerSae || S.peerSaeId,
-      subject, body, level: S.selectedLevel,
-      attachments,
-    });
-    const attNote = attachments.length ? ` | ${attachments.length} file(s) encrypted` : '';
-    result.innerHTML = `<span class="send-result ok">✓ Sent — Level ${r.level_used} | Key: ${r.key_id ? r.key_id.substring(0,8)+'...' : 'none'}${attNote}</span>`;
-    setTimeout(() => {
-      document.getElementById('compose-body').value = '';
-      document.getElementById('compose-files').value = '';
-      updateFileChips();
-      result.innerHTML = '';
-    }, 4000);
+    // 1. Encrypt
+    const encRes = await apiFetch('/api/email/encrypt',{method:'POST',body:{
+      body, attachments: STATE.attachments, level: STATE.selectedLevel,
+      master_sae: STATE.sae_id, slave_sae: STATE.slave_sae
+    }});
+
+    // 2. Send
+    const sendRes = await apiFetch('/api/email/send',{method:'POST',body:{
+      sender: STATE.email,
+      password: STATE.password,
+      recipient: to,
+      subject,
+      encrypted_body: encRes.encrypted_body,
+      key_id: encRes.key_id,
+      level: STATE.selectedLevel,
+      sae_id: STATE.sae_id,
+      slave_sae: STATE.slave_sae
+    }});
+
+    if (sendRes.success) {
+      toast(`✓ Sent! MsgID: ${sendRes.msg_id.slice(0,8)}…`,'success');
+    } else {
+      toast(`Saved locally, SMTP failed: ${sendRes.error}`,'warn');
+    }
+
+    // Clear form
+    document.getElementById('c-to').value = '';
+    document.getElementById('c-subject').value = '';
+    document.getElementById('c-body').value = '';
+    STATE.attachments = [];
+    renderAttachList();
+    updateEncryptPreview();
+    await loadInbox();
+
   } catch(e) {
-    result.innerHTML = `<span class="send-result fail">✗ ${e.message}</span>`;
+    toast('Send failed: '+e.message,'error');
+  }
+
+  document.getElementById('send-btn').innerHTML = '🚀 Encrypt &amp; Send';
+  setLoading('send-spinner',null,false);
+}
+
+// ═══════════════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════════════
+async function loadAudit() {
+  try {
+    const res = await apiFetch('/api/admin/audit?limit=100');
+    const logs = res.logs || [];
+    const el = document.getElementById('audit-content');
+    if (!logs.length) {
+      el.innerHTML = `<div class="empty-state"><div class="es-icon">📋</div><p>No audit entries yet.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<table class="audit-table">
+      <thead><tr>
+        <th>Time</th><th>Operation</th><th>Level</th><th>Key ID</th><th>Sender</th><th>Result</th>
+      </tr></thead>
+      <tbody>
+        ${logs.map(l=>`<tr>
+          <td>${fmtTime(l.timestamp)}</td>
+          <td><span class="op-badge op-${l.operation}">${l.operation}</span></td>
+          <td>${levelBadge(l.level)}</td>
+          <td style="color:var(--text3);font-size:10px;">${(l.key_id||'—').slice(0,16)}…</td>
+          <td>${escHtml(l.sender||'—')}</td>
+          <td><span class="${l.success?'success-y':'success-n'}">${l.success?'✓ OK':'✗ FAIL'}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    toast('Audit load failed','error');
   }
 }
 
-async function previewEncryption() {
-  const body = document.getElementById('compose-body').value || 'Hello, this is a secret message.';
-  const peerSae = document.getElementById('compose-peer-sae').value.trim() || S.peerSaeId;
+// ═══════════════════════════════════════════════
+// KM STATUS
+// ═══════════════════════════════════════════════
+async function refreshKmStatus() {
+  if (!STATE.token||!STATE.sae_id||!STATE.slave_sae) return;
   try {
-    const r = await fetch(`/api/demo/encrypt_preview?text=${encodeURIComponent(body)}&level=${S.selectedLevel}&master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(peerSae)}`);
-    const d = await r.json();
-    document.getElementById('enc-preview-text').textContent =
-      `Original: ${d.original}\n\nWire payload (what attacker sees):\n${d.encrypted}\n\nLevel: ${d.level_name}\nKey ID: ${d.key_id || 'N/A'}`;
-    document.getElementById('enc-preview').style.display = 'block';
-  } catch(e) {}
+    const res = await apiFetch(`/api/km/status?master_sae=${encodeURIComponent(STATE.sae_id)}&slave_sae=${encodeURIComponent(STATE.slave_sae)}`);
+    document.getElementById('km-text').textContent = `KM: ${res.percent_available}% free`;
+  } catch{}
 }
 
-// ═══════════════════════════════════════════════
-// KEY MANAGER
-// ═══════════════════════════════════════════════
-async function loadKMStatus() {
-  const el = document.getElementById('km-pool-info');
-  el.innerHTML = '<div class="loading"><span class="spin"></span></div>';
+async function showKmStatus() {
+  document.getElementById('km-modal').classList.remove('hidden');
+  document.getElementById('km-modal-content').textContent = 'Loading…';
   try {
-    const r = await fetch(`/api/km/status?master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`);
-    const d = await r.json();
-    const pct = Math.round((d.stored_key_count / d.max_key_count) * 100);
-    const barClass = pct > 40 ? '' : pct > 15 ? 'warn' : 'crit';
-    el.innerHTML = `
-      <div class="stat-row"><span>Status</span><span class="stat-val">${d.status}</span></div>
-      <div class="stat-row"><span>Available keys</span><span class="stat-val">${d.stored_key_count} / ${d.max_key_count}</span></div>
-      <div class="key-pool-bar"><div class="key-pool-fill ${barClass}" style="width:${pct}%"></div></div>
-      <div class="stat-row"><span>Key size</span><span class="stat-val">${d.key_size} bits</span></div>
-      <div class="stat-row"><span>Used keys</span><span class="stat-val">${d.used_key_count}</span></div>
-      <div class="stat-row"><span>Source KME</span><span class="stat-val">${d.source_KME_ID}</span></div>
+    const res = await apiFetch(`/api/km/status?master_sae=${encodeURIComponent(STATE.sae_id)}&slave_sae=${encodeURIComponent(STATE.slave_sae)}`);
+    document.getElementById('km-modal-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--accent)">${res.available.toLocaleString()}</div>
+          <div style="color:var(--text3);margin-top:2px;">Available Keys</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--text2)">${res.used.toLocaleString()}</div>
+          <div style="color:var(--text3);margin-top:2px;">Used Keys</div>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;color:var(--text3)">Pool utilization</div>
+      <div class="progress-bar" style="height:8px;border-radius:4px;">
+        <div class="progress-fill" style="width:${res.percent_available}%;background:var(--accent);height:8px;"></div>
+      </div>
+      <div style="margin-top:8px;color:var(--text3);">${res.percent_available}% of ${res.pool_size.toLocaleString()} keys available</div>
     `;
-    updateKMBadge(d.status);
   } catch(e) {
-    el.innerHTML = `<div style="color:var(--danger);font-size:13px">Error: ${e.message}</div>`;
+    document.getElementById('km-modal-content').textContent = 'Failed to fetch: '+e.message;
   }
 }
 
-async function refillKeys() {
-  await fetch(`/api/km/refill?master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`, {method:'POST'});
-  await loadKMStatus();
+async function loadSettingsKm() {
+  if (!STATE.token) return;
+  try {
+    const res = await apiFetch(`/api/km/status?master_sae=${encodeURIComponent(STATE.sae_id)}&slave_sae=${encodeURIComponent(STATE.slave_sae)}`);
+    document.getElementById('km-pool').textContent  = res.pool_size.toLocaleString()+' keys';
+    document.getElementById('km-avail').textContent = res.available.toLocaleString()+' ('+res.percent_available+'% free)';
+    document.getElementById('km-bar').style.width   = res.percent_available+'%';
+    document.getElementById('km-bar').style.background = res.percent_available > 50 ? 'var(--accent)' : res.percent_available > 20 ? 'var(--gold)' : 'var(--red)';
+  } catch{}
 }
 
-async function runLiveDemo() {
-  const text = document.getElementById('demo-text').value;
-  const level = document.getElementById('demo-level').value;
-  const el = document.getElementById('live-demo-result');
-  el.innerHTML = '<span class="spin"></span>';
+async function checkKyberStatus() {
   try {
-    const r = await fetch(`/api/demo/encrypt_preview?text=${encodeURIComponent(text)}&level=${level}&master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`);
-    const d = await r.json();
-    el.innerHTML = `<div class="demo-box"><pre>${esc(d.encrypted)}</pre></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:6px">Level: ${esc(d.level_name)} | Key ID: ${d.key_id || 'N/A'}</div>`;
+    const res = await apiFetch('/api/kyber/keypair');
+    const avail = res.kyber_native;
+    document.getElementById('kyber-status').textContent = avail ? 'liboqs installed — Kyber-768 native' : 'liboqs not installed — simulation mode';
+    document.getElementById('kyber-badge').innerHTML = avail
+      ? `<span style="color:var(--accent);font-family:var(--font-mono);font-size:11px;">✓ ACTIVE</span>`
+      : `<span style="color:var(--gold);font-family:var(--font-mono);font-size:11px;">⚠ SIMULATED</span>`;
+  } catch{}
+}
+
+// ═══════════════════════════════════════════════
+// DEMO INJECTOR
+// ═══════════════════════════════════════════════
+async function injectDemo(level) {
+  toast(`Preparing Level ${level} demo email…`, 'info');
+  try {
+    const encRes = await apiFetch('/api/email/encrypt',{method:'POST',body:{
+      body: `This is a demo Level ${level} encrypted message.\nSent at: ${new Date().toISOString()}\n\nQuMail v2 — Quantum-Secure Email System.`,
+      attachments: [], level,
+      master_sae: STATE.sae_id, slave_sae: STATE.slave_sae
+    }});
+    await apiFetch('/api/demo/receive',{method:'POST',body:{
+      sender: `demo-level${level}@qumail.local`,
+      subject: `[Demo L${level}] ${['','OTP Test','QAES Test','Kyber-768 Test'][level]}`,
+      encrypted_body: encRes.encrypted_body,
+      key_id: encRes.key_id,
+      level, attachments_count: 0
+    }});
+    await loadInbox();
+    showView('inbox');
+    toast(`✓ L${level} demo injected into inbox`, 'success');
   } catch(e) {
-    el.innerHTML = `<span style="color:var(--danger);font-size:13px">${e.message}</span>`;
+    toast('Demo inject failed: '+e.message, 'error');
   }
 }
 
-async function pollKMStatus() {
-  if (!S.saeId) return;
-  try {
-    const r = await fetch(`/api/km/status?master_sae_id=${encodeURIComponent(S.saeId)}&slave_sae_id=${encodeURIComponent(S.peerSaeId)}`);
-    const d = await r.json();
-    updateKMBadge(d.status);
-  } catch(e) {}
-  setTimeout(pollKMStatus, 15000);
-}
-
-function updateKMBadge(status) {
-  const b = document.getElementById('km-status-badge');
-  b.textContent = `KM: ${status}`;
-  b.className = 'km-badge' + (status==='ACTIVE'?'': status==='LOW'?' warn':' err');
-}
-
 // ═══════════════════════════════════════════════
-// UTILS
+// UTILITIES
 // ═══════════════════════════════════════════════
-async function api(path, method, body) {
-  const r = await fetch(path, {
-    method, headers: {'Content-Type':'application/json'},
-    body: body ? JSON.stringify(body) : undefined,
+async function apiFetch(url, opts={}) {
+  const headers = {'Content-Type':'application/json'};
+  if (STATE.token) headers['Authorization'] = 'Bearer '+STATE.token;
+  const res = await fetch(API+url, {
+    method: opts.method||'GET',
+    headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined
   });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.detail || JSON.stringify(d));
-  return d;
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.detail||data.error||`HTTP ${res.status}`);
+  return data;
 }
 
-function esc(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(), 4000);
 }
 
-function formatDate(d) {
-  if (!d) return '';
-  try { return new Date(d).toLocaleDateString(); } catch(e) { return d.substring(0,10); }
+function setLoading(spinnerId, labelId, loading, label='') {
+  const sp = document.getElementById(spinnerId);
+  if (sp) sp.classList.toggle('hidden',!loading);
+  if (labelId) {
+    const lb = document.getElementById(labelId);
+    if (lb && label) lb.textContent = loading ? label : label;
+  }
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return '';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+(async () => {
+  selectLevel(2);
+  updateLevelBanner();
+  const restored = await tryRestoreSession();
+  if (restored) {
+    await onLoggedIn();
+  }
+  // Refresh KM status every 60s
+  setInterval(refreshKmStatus, 60000);
+})();
 </script>
 </body>
 </html>

@@ -1,196 +1,126 @@
 """
-Crypto Engine — implements all 4 QuMail security levels.
-
-Level 1 — One-Time Pad (OTP)
-    XOR plaintext with quantum key bytes. Unconditionally secure.
-    Requires quantum key bytes equal in length to the message.
-
-Level 2 — Quantum-seeded AES-256-GCM
-    Quantum key bytes are used as entropy to derive an AES key via HKDF.
-    Encrypts arbitrary-length messages. Strong classical + quantum seed.
-
-Level 3 — Standard AES-256-GCM (no quantum)
-    Classical AES with a random key. PQC-ready placeholder.
-    Use when KM is unreachable.
-
-Level 4 — No encryption (plaintext)
-    Message sent as-is. Baseline for demo comparison.
+Key Manager (KM) Simulator
+Simulates a QKD (Quantum Key Distribution) key management server.
+Maintains a pool of pre-generated quantum-safe random keys per SAE pair.
 """
+
 import os
-import base64
-import json
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+import uuid
+import secrets
+import threading
+from typing import List, Dict, Tuple
+from dotenv import load_dotenv
+
+load_dotenv()
+
+POOL_SIZE = int(os.getenv("KM_POOL_SIZE", "100000"))
+KEY_SIZE = int(os.getenv("KEY_SIZE_BYTES", "32"))
+
+# Thread-safe in-memory key store: {(master_sae, slave_sae): [{"key_ID": str, "key": hex, "used": bool}]}
+_lock = threading.Lock()
+_pools: Dict[Tuple[str, str], List[dict]] = {}
 
 
-def _b64(data: bytes) -> str:
-    return base64.b64encode(data).decode()
-
-def _unb64(s: str) -> bytes:
-    return base64.b64decode(s.encode())
+def _pool_key(master_sae: str, slave_sae: str) -> Tuple[str, str]:
+    """Canonical key: always sorted so A↔B == B↔A for same pool."""
+    return tuple(sorted([master_sae, slave_sae]))
 
 
-# ─── Bundle helpers ──────────────────────────────────────────────────────────
+def ensure_pool(master_sae: str, slave_sae: str) -> None:
+    """Initialize key pool for a SAE pair if not already present."""
+    pk = _pool_key(master_sae, slave_sae)
+    with _lock:
+        if pk not in _pools:
+            _pools[pk] = [
+                {
+                    "key_ID": str(uuid.uuid4()),
+                    "key": secrets.token_hex(KEY_SIZE),
+                    "used": False
+                }
+                for _ in range(POOL_SIZE)
+            ]
 
-def _pack_bundle(body: str, attachments: list = None) -> str:
-    """Combine message body + attachment list into one JSON string before encryption.
-    Attachments is a list of {filename, data_b64, mime_type, size} dicts.
+
+def get_keys(master_sae: str, slave_sae: str, number: int = 1) -> List[dict]:
     """
-    return json.dumps({"body": body, "attachments": attachments or []})
-
-
-def _unpack_bundle(decrypted_text: str) -> tuple:
-    """Extract body + attachments from a decrypted bundle string.
-    Falls back gracefully for legacy messages that contain raw plaintext.
+    Retrieve fresh (unused) keys from the pool.
+    Returns list of {key_ID, key} dicts.
+    Raises ValueError if pool exhausted.
     """
-    try:
-        obj = json.loads(decrypted_text)
-        if isinstance(obj, dict) and "body" in obj:
-            return obj["body"], obj.get("attachments", [])
-    except Exception:
-        pass
-    # Legacy / non-QuMail message — treat entire text as body
-    return decrypted_text, []
+    ensure_pool(master_sae, slave_sae)
+    pk = _pool_key(master_sae, slave_sae)
+
+    with _lock:
+        pool = _pools[pk]
+        available = [k for k in pool if not k["used"]]
+
+        if len(available) < number:
+            raise ValueError(
+                f"KM pool exhausted: requested {number}, available {len(available)}. "
+                "Consider upgrading to Level 2 (QAES) which reuses keys via HKDF."
+            )
+
+        selected = available[:number]
+        for k in selected:
+            k["used"] = True
+
+        return [{"key_ID": k["key_ID"], "key": k["key"]} for k in selected]
 
 
-def compute_bundle(body: str, attachments: list = None) -> str:
-    """Return the bundle string that will be encrypted.
-    Exposed so callers (e.g. main.py) can compute byte-length for OTP key sizing.
+def get_key_by_id(master_sae: str, slave_sae: str, key_ids: List[str]) -> List[dict]:
     """
-    return _pack_bundle(body, attachments)
+    Retrieve specific keys by their IDs (for decryption).
+    Returns list of {key_ID, key} dicts.
+    """
+    ensure_pool(master_sae, slave_sae)
+    pk = _pool_key(master_sae, slave_sae)
+
+    with _lock:
+        pool = _pools[pk]
+        id_map = {k["key_ID"]: k for k in pool}
+
+        result = []
+        for kid in key_ids:
+            if kid in id_map:
+                result.append({"key_ID": kid, "key": id_map[kid]["key"]})
+            else:
+                raise ValueError(f"Key ID not found: {kid}")
+
+        return result
 
 
-# ─── Level 1: One-Time Pad ────────────────────────────────────────────────────
+def get_status(master_sae: str, slave_sae: str) -> dict:
+    """Return pool statistics for a SAE pair."""
+    ensure_pool(master_sae, slave_sae)
+    pk = _pool_key(master_sae, slave_sae)
 
-def otp_encrypt(plaintext: str, key_hex: str) -> dict:
-    pt_bytes = plaintext.encode("utf-8")
-    key_bytes = bytes.fromhex(key_hex)
-    if len(key_bytes) < len(pt_bytes):
-        raise ValueError(
-            f"OTP requires key ≥ message length. "
-            f"Key: {len(key_bytes)}B, Message: {len(pt_bytes)}B. "
-            "Request a longer key or use Level 2."
-        )
-    key_slice = key_bytes[:len(pt_bytes)]
-    ciphertext = bytes(a ^ b for a, b in zip(pt_bytes, key_slice))
+    with _lock:
+        pool = _pools[pk]
+        total = len(pool)
+        used = sum(1 for k in pool if k["used"])
+        available = total - used
+        percent = round((available / total) * 100, 2) if total > 0 else 0
+
     return {
-        "level": 1,
-        "ciphertext": _b64(ciphertext),
-        "msg_len": len(pt_bytes),
+        "pool_size": total,
+        "available": available,
+        "used": used,
+        "percent_available": percent
     }
 
 
-def otp_decrypt(payload: dict, key_hex: str) -> str:
-    ct = _unb64(payload["ciphertext"])
-    key_bytes = bytes.fromhex(key_hex)[:payload["msg_len"]]
-    return bytes(a ^ b for a, b in zip(ct, key_bytes)).decode("utf-8")
-
-
-# ─── Level 2: Quantum-seeded AES-256-GCM ─────────────────────────────────────
-
-def qaes_encrypt(plaintext: str, key_hex: str) -> dict:
-    quantum_seed = bytes.fromhex(key_hex)
-    # Derive 32-byte AES key from quantum seed
-    aes_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b"QuMail-Level2-AES",
-    ).derive(quantum_seed)
-    nonce = os.urandom(12)
-    aesgcm = AESGCM(aes_key)
-    ct = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
-    return {
-        "level": 2,
-        "nonce": _b64(nonce),
-        "ciphertext": _b64(ct),
-    }
-
-
-def qaes_decrypt(payload: dict, key_hex: str) -> str:
-    quantum_seed = bytes.fromhex(key_hex)
-    aes_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b"QuMail-Level2-AES",
-    ).derive(quantum_seed)
-    nonce = _unb64(payload["nonce"])
-    ct = _unb64(payload["ciphertext"])
-    aesgcm = AESGCM(aes_key)
-    return aesgcm.decrypt(nonce, ct, None).decode("utf-8")
-
-
-# ─── Level 3: Standard AES-256-GCM (no quantum) ──────────────────────────────
-
-def aes_encrypt(plaintext: str) -> dict:
-    aes_key = os.urandom(32)
-    nonce = os.urandom(12)
-    aesgcm = AESGCM(aes_key)
-    ct = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
-    return {
-        "level": 3,
-        "key": _b64(aes_key),   # key travels with message for demo; in prod use PKI
-        "nonce": _b64(nonce),
-        "ciphertext": _b64(ct),
-    }
-
-
-def aes_decrypt(payload: dict) -> str:
-    aes_key = _unb64(payload["key"])
-    nonce = _unb64(payload["nonce"])
-    ct = _unb64(payload["ciphertext"])
-    aesgcm = AESGCM(aes_key)
-    return aesgcm.decrypt(nonce, ct, None).decode("utf-8")
-
-
-# ─── Level 4: No encryption ───────────────────────────────────────────────────
-
-def plain_encrypt(plaintext: str) -> dict:
-    return {"level": 4, "plaintext": plaintext}
-
-
-def plain_decrypt(payload: dict) -> str:
-    return payload["plaintext"]
-
-
-# ─── Unified interface ────────────────────────────────────────────────────────
-
-def encrypt(plaintext: str, level: int, key_hex: str = None, attachments: list = None) -> str:
-    """Returns JSON string to embed in email body.
-
-    Attachments (list of {filename, data_b64, mime_type, size} dicts) are bundled
-    with the body *before* any crypto function runs, so the chosen security level
-    protects the full message payload atomically.
+def get_keys_for_otp(master_sae: str, slave_sae: str, byte_count: int) -> List[dict]:
     """
-    bundle = _pack_bundle(plaintext, attachments)
-    if level == 1:
-        payload = otp_encrypt(bundle, key_hex)
-    elif level == 2:
-        payload = qaes_encrypt(bundle, key_hex)
-    elif level == 3:
-        payload = aes_encrypt(bundle)
-    else:
-        payload = plain_encrypt(bundle)
-    return json.dumps(payload)
-
-
-def decrypt(payload_json: str, key_hex: str = None) -> tuple:
-    """Returns (plaintext, level, attachments).
-
-    attachments is a list of {filename, data_b64, mime_type, size} dicts.
-    It is an empty list for messages sent without attachments or by older clients.
+    For OTP: fetch enough keys to cover byte_count bytes.
+    Each key is KEY_SIZE bytes (32). Returns multiple keys if needed.
     """
-    payload = json.loads(payload_json)
-    level = payload.get("level", 4)
-    if level == 1:
-        raw = otp_decrypt(payload, key_hex)
-    elif level == 2:
-        raw = qaes_decrypt(payload, key_hex)
-    elif level == 3:
-        raw = aes_decrypt(payload)
-    else:
-        raw = plain_decrypt(payload)
-    body, attachments = _unpack_bundle(raw)
-    return body, level, attachments
+    keys_needed = -(-byte_count // KEY_SIZE)  # ceiling division
+    return get_keys(master_sae, slave_sae, keys_needed)
+
+
+def combine_key_material(keys: List[dict]) -> bytes:
+    """Concatenate multiple key hex strings into a single byte stream."""
+    combined = b""
+    for k in keys:
+        combined += bytes.fromhex(k["key"])
+    return combined

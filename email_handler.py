@@ -1,44 +1,69 @@
 """
-Email Handler — IMAP fetch and SMTP send.
-Works with Gmail (requires App Password), Yahoo, and any IMAP/SMTP provider.
-
-QuMail encryption happens BEFORE aiosmtplib touches the message.
-The email body contains a JSON payload — Gmail sees an opaque blob.
-The X-QKD-KeyID and X-QKD-Level headers tell the recipient which key to fetch.
+QuMail Email Handler
+Handles SMTP sending and IMAP fetching for Gmail, Yahoo, and Outlook.
+QKD metadata is embedded in custom X-QKD-* headers.
 """
+
 import asyncio
 import ssl
-import email as email_lib
-import base64
-from email.mime.multipart import MIMEMultipart
+import os
+from typing import List, Dict, Optional
 from email.mime.text import MIMEText
-from typing import Optional
-import aiosmtplib
-import aioimaplib
+from email.mime.multipart import MIMEMultipart
+from email.parser import BytesParser
+from email import policy as email_policy
+import email.utils
+from dotenv import load_dotenv
 
+load_dotenv()
+
+# ── Provider config ────────────────────────────────────────────────────────────
 
 SMTP_CONFIGS = {
-    "gmail": {"host": "smtp.gmail.com", "port": 465},
-    "yahoo": {"host": "smtp.mail.yahoo.com", "port": 465},
-    "outlook": {"host": "smtp-mail.outlook.com", "port": 587},
+    "gmail": {
+        "host": os.getenv("GMAIL_SMTP_HOST", "smtp.gmail.com"),
+        "port": int(os.getenv("GMAIL_SMTP_PORT", "465")),
+        "use_ssl": True
+    },
+    "yahoo": {
+        "host": os.getenv("YAHOO_SMTP_HOST", "smtp.mail.yahoo.com"),
+        "port": int(os.getenv("YAHOO_SMTP_PORT", "465")),
+        "use_ssl": True
+    },
+    "outlook": {
+        "host": os.getenv("OUTLOOK_SMTP_HOST", "smtp-mail.outlook.com"),
+        "port": int(os.getenv("OUTLOOK_SMTP_PORT", "587")),
+        "use_ssl": False  # STARTTLS
+    }
 }
 
 IMAP_CONFIGS = {
-    "gmail": {"host": "imap.gmail.com", "port": 993},
-    "yahoo": {"host": "imap.mail.yahoo.com", "port": 993},
-    "outlook": {"host": "outlook.office365.com", "port": 993},
+    "gmail": {
+        "host": os.getenv("GMAIL_IMAP_HOST", "imap.gmail.com"),
+        "port": int(os.getenv("GMAIL_IMAP_PORT", "993"))
+    },
+    "yahoo": {
+        "host": os.getenv("YAHOO_IMAP_HOST", "imap.mail.yahoo.com"),
+        "port": int(os.getenv("YAHOO_IMAP_PORT", "993"))
+    },
+    "outlook": {
+        "host": os.getenv("OUTLOOK_IMAP_HOST", "imap-mail.outlook.com"),
+        "port": int(os.getenv("OUTLOOK_IMAP_PORT", "993"))
+    }
 }
 
 
-def detect_provider(email_addr: str) -> str:
-    domain = email_addr.split("@")[-1].lower()
+def detect_provider(email: str) -> str:
+    """Detect email provider from address domain."""
+    domain = email.split("@")[-1].lower()
     if "gmail" in domain:
         return "gmail"
-    elif "yahoo" in domain:
+    elif "yahoo" in domain or "ymail" in domain:
         return "yahoo"
-    elif "outlook" in domain or "hotmail" in domain:
+    elif "outlook" in domain or "hotmail" in domain or "live" in domain or "msn" in domain:
         return "outlook"
-    return "gmail"  # default fallback
+    else:
+        return "gmail"  # default fallback
 
 
 async def send_email(
@@ -47,39 +72,57 @@ async def send_email(
     recipient: str,
     subject: str,
     encrypted_body: str,
-    key_id: Optional[str],
+    key_id: str,
     level: int,
-    sender_sae_id: str,
-) -> dict:
-    """Send an email with encrypted body and QKD headers."""
+    sae_id: str,
+    slave_sae: str = ""
+) -> Dict:
+    """
+    Send a QKD-encrypted email via SMTP.
+    Embeds encryption metadata in X-QKD-* headers.
+    The encrypted_body (JSON string) goes in the email body.
+    """
     try:
+        import aiosmtplib
+
         provider = detect_provider(sender)
         cfg = SMTP_CONFIGS[provider]
 
-        msg = MIMEMultipart()
+        msg = MIMEMultipart("alternative")
         msg["From"] = sender
         msg["To"] = recipient
         msg["Subject"] = subject
+        msg["Date"] = email.utils.formatdate(localtime=True)
 
-        # QKD metadata headers — recipient's app reads these to know which key to fetch
-        if key_id:
-            msg["X-QKD-KeyID"] = key_id
-            msg["X-QKD-SenderSAE"] = sender_sae_id
+        # QKD metadata headers
+        msg["X-QKD-App"] = "QuMail-v2"
+        msg["X-QKD-KeyID"] = key_id
         msg["X-QKD-Level"] = str(level)
-        msg["X-QKD-App"] = "QuMail-1.0"
+        msg["X-QKD-SenderSAE"] = sae_id
+        if slave_sae:
+            msg["X-QKD-SlaveSAE"] = slave_sae
 
-        # The encrypted_body JSON blob already contains any attachments bundled
-        # and protected under the same quantum-secure level as the message body.
-        # No plaintext MIME attachments are added here.
-        msg.attach(MIMEText(encrypted_body, "plain"))
+        # Encrypted payload as plain text body
+        msg.attach(MIMEText(encrypted_body, "plain", "utf-8"))
 
-        if provider == "outlook":
-            # Outlook uses STARTTLS on 587
-            await aiosmtplib.send(msg, hostname=cfg["host"], port=cfg["port"],
-                                  username=sender, password=password, start_tls=True)
+        if cfg["use_ssl"]:
+            ctx = ssl.create_default_context()
+            smtp = aiosmtplib.SMTP(
+                hostname=cfg["host"],
+                port=cfg["port"],
+                use_tls=True,
+                tls_context=ctx
+            )
         else:
-            await aiosmtplib.send(msg, hostname=cfg["host"], port=cfg["port"],
-                                  username=sender, password=password, use_tls=True)
+            smtp = aiosmtplib.SMTP(
+                hostname=cfg["host"],
+                port=cfg["port"],
+                start_tls=True
+            )
+
+        async with smtp:
+            await smtp.login(sender, password)
+            await smtp.send_message(msg)
 
         return {"success": True}
 
@@ -87,66 +130,77 @@ async def send_email(
         return {"success": False, "error": str(e)}
 
 
-async def fetch_emails(email_addr: str, password: str, folder: str = "INBOX", limit: int = 20) -> list:
-    """Fetch recent emails via IMAP. Returns list of parsed email dicts."""
-    provider = detect_provider(email_addr)
-    cfg = IMAP_CONFIGS[provider]
-
+async def fetch_emails(
+    email_addr: str,
+    password: str,
+    folder: str = "INBOX",
+    limit: int = 20
+) -> List[Dict]:
+    """
+    Fetch emails via IMAP, parsing X-QKD-* headers.
+    Returns list of parsed email dicts.
+    """
     try:
-        imap = aioimaplib.IMAP4_SSL(host=cfg["host"], port=cfg["port"])
-        await imap.wait_hello_from_server()
-        await imap.login(email_addr, password)
-        await imap.select(folder)
+        import aioimaplib
 
-        # Fetch most recent N message IDs
-        _, data = await imap.search("ALL")
-        if not data or not data[0]:
-            await imap.logout()
+        provider = detect_provider(email_addr)
+        cfg = IMAP_CONFIGS[provider]
+
+        client = aioimaplib.IMAP4_SSL(host=cfg["host"], port=cfg["port"])
+        await client.wait_hello_from_server()
+        await client.login(email_addr, password)
+        await client.select(folder)
+
+        # Fetch message UIDs
+        _, data = await client.search("ALL")
+        uids = data[0].split()
+
+        if not uids:
+            await client.logout()
             return []
 
-        ids = data[0].split()
-        recent_ids = ids[-limit:]  # last N emails
+        # Fetch latest `limit` messages
+        recent_uids = uids[-limit:]
+        results = []
 
-        emails = []
-        for uid in reversed(recent_ids):
-            _, msg_data = await imap.fetch(uid.decode(), "(RFC822)")
-            if not msg_data or len(msg_data) < 2:
-                continue
+        for uid in reversed(recent_uids):
+            _, msg_data = await client.fetch(uid.decode(), "(RFC822)")
+            if msg_data and len(msg_data) >= 2:
+                raw = msg_data[1]
+                parsed = BytesParser(policy=email_policy.default).parsebytes(raw)
 
-            raw = msg_data[1]
-            if isinstance(raw, (bytes, bytearray)):
-                parsed = email_lib.message_from_bytes(raw)
-            else:
-                continue
+                # Extract QKD headers
+                key_id = parsed.get("X-QKD-KeyID", "")
+                level = int(parsed.get("X-QKD-Level", "4"))
+                sender_sae = parsed.get("X-QKD-SenderSAE", "")
+                slave_sae = parsed.get("X-QKD-SlaveSAE", "")
+                is_qumail = parsed.get("X-QKD-App", "") == "QuMail-v2"
 
-            body = ""
-            if parsed.is_multipart():
-                for part in parsed.walk():
-                    if part.get_content_type() == "text/plain":
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            body = payload.decode("utf-8", errors="replace")
+                # Get body
+                body = ""
+                if parsed.is_multipart():
+                    for part in parsed.walk():
+                        if part.get_content_type() == "text/plain":
+                            body = part.get_content()
                             break
-            else:
-                payload = parsed.get_payload(decode=True)
-                if payload:
-                    body = payload.decode("utf-8", errors="replace")
+                else:
+                    body = parsed.get_content()
 
-            emails.append({
-                "uid": uid.decode(),
-                "from": parsed.get("From", ""),
-                "to": parsed.get("To", ""),
-                "subject": parsed.get("Subject", "(no subject)"),
-                "date": parsed.get("Date", ""),
-                "body": body,
-                "qkd_key_id": parsed.get("X-QKD-KeyID", None),
-                "qkd_level": int(parsed.get("X-QKD-Level", 4)),
-                "qkd_sender_sae": parsed.get("X-QKD-SenderSAE", None),
-                "is_qumail": parsed.get("X-QKD-App", None) == "QuMail-1.0",
-            })
+                results.append({
+                    "uid": uid.decode(),
+                    "from": str(parsed["From"]),
+                    "subject": str(parsed["Subject"] or "(no subject)"),
+                    "date": str(parsed["Date"] or ""),
+                    "body": body.strip(),
+                    "key_id": key_id,
+                    "level": level,
+                    "sender_sae": sender_sae,
+                    "slave_sae": slave_sae,
+                    "is_qumail": is_qumail
+                })
 
-        await imap.logout()
-        return emails
+        await client.logout()
+        return results
 
     except Exception as e:
         return [{"error": str(e)}]
