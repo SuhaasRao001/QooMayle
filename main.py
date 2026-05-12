@@ -127,8 +127,8 @@ async def send_email(payload: SendPayload):
     key_hex = None
 
     if payload.level in (1, 2):
-        # Key sizing must account for the full bundle (body + attachments),
-        # not just the body text, so OTP has enough key material.
+        # Key sizing: for OTP use the post-compression byte count (matching what
+        # crypto.encrypt() actually XORs); for L2 a single key always suffices.
         attachments_data = [a.model_dump() for a in payload.attachments]
         bundle_str = crypto.compute_bundle(payload.body, attachments_data)
         msg_bytes = len(bundle_str.encode("utf-8"))

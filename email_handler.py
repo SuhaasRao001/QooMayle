@@ -10,7 +10,6 @@ import asyncio
 import ssl
 import email as email_lib
 import base64
-import socket
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
@@ -19,9 +18,9 @@ import aioimaplib
 
 
 SMTP_CONFIGS = {
-    "gmail": {"host": "smtp.gmail.com", "port": 587, "use_tls": False, "starttls": True},
-    "yahoo": {"host": "smtp.mail.yahoo.com", "port": 465, "use_tls": True, "starttls": False},
-    "outlook": {"host": "smtp-mail.outlook.com", "port": 587, "use_tls": False, "starttls": True},
+    "gmail": {"host": "smtp.gmail.com", "port": 465},
+    "yahoo": {"host": "smtp.mail.yahoo.com", "port": 465},
+    "outlook": {"host": "smtp-mail.outlook.com", "port": 587},
 }
 
 IMAP_CONFIGS = {
@@ -56,57 +55,36 @@ async def send_email(
     try:
         provider = detect_provider(sender)
         cfg = SMTP_CONFIGS[provider]
-        
-        print(f"Sending via {provider}: {cfg['host']}:{cfg['port']}")
-        
+
         msg = MIMEMultipart()
         msg["From"] = sender
         msg["To"] = recipient
         msg["Subject"] = subject
 
+        # QKD metadata headers — recipient's app reads these to know which key to fetch
         if key_id:
             msg["X-QKD-KeyID"] = key_id
             msg["X-QKD-SenderSAE"] = sender_sae_id
         msg["X-QKD-Level"] = str(level)
         msg["X-QKD-App"] = "QuMail-1.0"
 
+        # The encrypted_body JSON blob already contains any attachments bundled
+        # and protected under the same quantum-secure level as the message body.
+        # No plaintext MIME attachments are added here.
         msg.attach(MIMEText(encrypted_body, "plain"))
 
-        print(f"Creating SMTP client (use_tls={cfg['use_tls']}, timeout=60s)...")
-        client = aiosmtplib.SMTP(
-            hostname=cfg["host"],
-            port=cfg["port"],
-            use_tls=cfg["use_tls"],
-            timeout=60
-        )
-        
-        print(f"Connecting to {cfg['host']}:{cfg['port']}...")
-        await asyncio.wait_for(client.connect(), timeout=65)
-        print(f"Connected ✓")
-        
-        # Handle STARTTLS for port 587
-        if cfg.get("starttls"):
-            print(f"Starting TLS...")
-            await asyncio.wait_for(client.starttls(), timeout=65)
-            print(f"TLS started ✓")
-        
-        print(f"Authenticating as {sender}...")
-        await asyncio.wait_for(client.login(sender, password), timeout=65)
-        print(f"Authenticated ✓")
-        
-        print(f"Sending message...")
-        await asyncio.wait_for(client.send_message(msg), timeout=65)
-        print(f"Sent ✓")
-        
-        await client.quit()
+        if provider == "outlook":
+            # Outlook uses STARTTLS on 587
+            await aiosmtplib.send(msg, hostname=cfg["host"], port=cfg["port"],
+                                  username=sender, password=password, start_tls=True)
+        else:
+            await aiosmtplib.send(msg, hostname=cfg["host"], port=cfg["port"],
+                                  username=sender, password=password, use_tls=True)
+
         return {"success": True}
-        
-    except asyncio.TimeoutError:
-        return {"success": False, "error": "SMTP connection timeout"}
+
     except Exception as e:
-        error_str = f"{type(e).__name__}: {str(e)[:100]}"
-        print(f"SMTP error: {error_str}")
-        return {"success": False, "error": error_str}
+        return {"success": False, "error": str(e)}
 
 
 async def fetch_emails(email_addr: str, password: str, folder: str = "INBOX", limit: int = 20) -> list:
