@@ -1,125 +1,126 @@
 """
-KM Simulator - mocks ETSI GS QKD 014 REST API
-Each "SAE ID" pair shares a pre-generated symmetric key pool.
-Real QKD hardware would replace this module entirely — interface stays identical.
+Key Manager (KM) Simulator
+Simulates a QKD (Quantum Key Distribution) key management server.
+Maintains a pool of pre-generated quantum-safe random keys per SAE pair.
 """
+
 import os
-import secrets
 import uuid
-from typing import Dict, List, Optional
-from datetime import datetime
+import secrets
+import threading
+from typing import List, Dict, Tuple
+from dotenv import load_dotenv
 
-# In-memory key store — persists for process lifetime
-# key_pools[sae_id][key_id] = hex_key_bytes
-key_pools: Dict[str, Dict[str, str]] = {}
-key_metadata: Dict[str, dict] = {}
+load_dotenv()
 
-POOL_SIZE = 100_000     # 100k × 32 B = 3.2 MB key material — supports OTP on attachments up to ~3 MB
-KEY_SIZE_BYTES = 32     # 256-bit keys
+POOL_SIZE = int(os.getenv("KM_POOL_SIZE", "100000"))
+KEY_SIZE = int(os.getenv("KEY_SIZE_BYTES", "32"))
 
-
-def _pool_id(master_sae_id: str, slave_sae_id: str) -> str:
-    """Canonical pool ID — same regardless of who asks."""
-    return "|".join(sorted([master_sae_id, slave_sae_id]))
+# Thread-safe in-memory key store: {(master_sae, slave_sae): [{"key_ID": str, "key": hex, "used": bool}]}
+_lock = threading.Lock()
+_pools: Dict[Tuple[str, str], List[dict]] = {}
 
 
-def ensure_pool(master_sae_id: str, slave_sae_id: str):
-    """Generate a key pool for a SAE pair if it doesn't exist."""
-    pid = _pool_id(master_sae_id, slave_sae_id)
-    if pid not in key_pools:
-        key_pools[pid] = {}
-        for _ in range(POOL_SIZE):
-            kid = str(uuid.uuid4())
-            key_pools[pid][kid] = secrets.token_hex(KEY_SIZE_BYTES)
-            key_metadata[kid] = {
-                "key_id": kid,
-                "pool_id": pid,
-                "created_at": datetime.utcnow().isoformat(),
-                "used": False,
-            }
+def _pool_key(master_sae: str, slave_sae: str) -> Tuple[str, str]:
+    """Canonical key: always sorted so A↔B == B↔A for same pool."""
+    return tuple(sorted([master_sae, slave_sae]))
 
 
-def get_keys(master_sae_id: str, slave_sae_id: str, number: int = 1, size: int = 256) -> Optional[dict]:
+def ensure_pool(master_sae: str, slave_sae: str) -> None:
+    """Initialize key pool for a SAE pair if not already present."""
+    pk = _pool_key(master_sae, slave_sae)
+    with _lock:
+        if pk not in _pools:
+            _pools[pk] = [
+                {
+                    "key_ID": str(uuid.uuid4()),
+                    "key": secrets.token_hex(KEY_SIZE),
+                    "used": False
+                }
+                for _ in range(POOL_SIZE)
+            ]
+
+
+def get_keys(master_sae: str, slave_sae: str, number: int = 1) -> List[dict]:
     """
-    ETSI QKD 014 - GET /api/v1/keys/{slave_sae_id}/enc_keys
-    Returns a block of fresh keys, marks them used.
+    Retrieve fresh (unused) keys from the pool.
+    Returns list of {key_ID, key} dicts.
+    Raises ValueError if pool exhausted.
     """
-    ensure_pool(master_sae_id, slave_sae_id)
-    pid = _pool_id(master_sae_id, slave_sae_id)
-    pool = key_pools[pid]
+    ensure_pool(master_sae, slave_sae)
+    pk = _pool_key(master_sae, slave_sae)
 
-    available = [kid for kid, _ in pool.items() if not key_metadata[kid]["used"]]
-    if len(available) < number:
-        return None  # Key exhaustion — caller should downgrade security level
+    with _lock:
+        pool = _pools[pk]
+        available = [k for k in pool if not k["used"]]
 
-    selected = available[:number]
-    result_keys = []
-    for kid in selected:
-        key_metadata[kid]["used"] = True
-        result_keys.append({
-            "key_ID": kid,
-            "key": pool[kid],   # hex string
-        })
+        if len(available) < number:
+            raise ValueError(
+                f"KM pool exhausted: requested {number}, available {len(available)}. "
+                "Consider upgrading to Level 2 (QAES) which reuses keys via HKDF."
+            )
+
+        selected = available[:number]
+        for k in selected:
+            k["used"] = True
+
+        return [{"key_ID": k["key_ID"], "key": k["key"]} for k in selected]
+
+
+def get_key_by_id(master_sae: str, slave_sae: str, key_ids: List[str]) -> List[dict]:
+    """
+    Retrieve specific keys by their IDs (for decryption).
+    Returns list of {key_ID, key} dicts.
+    """
+    ensure_pool(master_sae, slave_sae)
+    pk = _pool_key(master_sae, slave_sae)
+
+    with _lock:
+        pool = _pools[pk]
+        id_map = {k["key_ID"]: k for k in pool}
+
+        result = []
+        for kid in key_ids:
+            if kid in id_map:
+                result.append({"key_ID": kid, "key": id_map[kid]["key"]})
+            else:
+                raise ValueError(f"Key ID not found: {kid}")
+
+        return result
+
+
+def get_status(master_sae: str, slave_sae: str) -> dict:
+    """Return pool statistics for a SAE pair."""
+    ensure_pool(master_sae, slave_sae)
+    pk = _pool_key(master_sae, slave_sae)
+
+    with _lock:
+        pool = _pools[pk]
+        total = len(pool)
+        used = sum(1 for k in pool if k["used"])
+        available = total - used
+        percent = round((available / total) * 100, 2) if total > 0 else 0
 
     return {
-        "keys": result_keys,
-        "key_ID_extension": {"master_SAE_ID": master_sae_id, "slave_SAE_ID": slave_sae_id},
+        "pool_size": total,
+        "available": available,
+        "used": used,
+        "percent_available": percent
     }
 
 
-def get_key_by_id(slave_sae_id: str, master_sae_id: str, key_ids: List[str]) -> Optional[dict]:
+def get_keys_for_otp(master_sae: str, slave_sae: str, byte_count: int) -> List[dict]:
     """
-    ETSI QKD 014 - POST /api/v1/keys/{master_sae_id}/dec_keys
-    Recipient fetches the key by ID that the sender embedded in the email header.
+    For OTP: fetch enough keys to cover byte_count bytes.
+    Each key is KEY_SIZE bytes (32). Returns multiple keys if needed.
     """
-    ensure_pool(master_sae_id, slave_sae_id)
-    pid = _pool_id(master_sae_id, slave_sae_id)
-    pool = key_pools[pid]
-
-    result_keys = []
-    for kid in key_ids:
-        if kid in pool:
-            result_keys.append({
-                "key_ID": kid,
-                "key": pool[kid],
-            })
-
-    if not result_keys:
-        return None
-
-    return {"keys": result_keys}
+    keys_needed = -(-byte_count // KEY_SIZE)  # ceiling division
+    return get_keys(master_sae, slave_sae, keys_needed)
 
 
-def get_status(master_sae_id: str, slave_sae_id: str) -> dict:
-    """ETSI QKD 014 - GET /api/v1/keys/{slave_sae_id}/status"""
-    ensure_pool(master_sae_id, slave_sae_id)
-    pid = _pool_id(master_sae_id, slave_sae_id)
-    pool = key_pools[pid]
-    available = sum(1 for kid in pool if not key_metadata[kid]["used"])
-    used = len(pool) - available
-
-    return {
-        "source_KME_ID": "KME-SIM-001",
-        "target_KME_ID": "KME-SIM-002",
-        "master_SAE_ID": master_sae_id,
-        "slave_SAE_ID": slave_sae_id,
-        "key_size": KEY_SIZE_BYTES * 8,
-        "stored_key_count": available,
-        "max_key_count": POOL_SIZE,
-        "max_key_per_request": 10,
-        "max_key_size": KEY_SIZE_BYTES * 8,
-        "min_key_size": 64,
-        "used_key_count": used,
-        "status": "ACTIVE" if available > 5 else ("LOW" if available > 0 else "EXHAUSTED"),
-    }
-
-
-def refill_pool(master_sae_id: str, slave_sae_id: str):
-    """Demo helper — refill key pool (simulates new QKD session)."""
-    pid = _pool_id(master_sae_id, slave_sae_id)
-    if pid in key_pools:
-        del key_pools[pid]
-        for kid in list(key_metadata.keys()):
-            if key_metadata[kid]["pool_id"] == pid:
-                del key_metadata[kid]
-    ensure_pool(master_sae_id, slave_sae_id)
+def combine_key_material(keys: List[dict]) -> bytes:
+    """Concatenate multiple key hex strings into a single byte stream."""
+    combined = b""
+    for k in keys:
+        combined += bytes.fromhex(k["key"])
+    return combined
