@@ -19,25 +19,9 @@ import aioimaplib
 
 
 SMTP_CONFIGS = {
-    "gmail": {"host": "smtp.gmail.com", "port": 465},
-    "yahoo": {"host": "smtp.mail.yahoo.com", "port": 465},
-    "outlook": {"host": "smtp-mail.outlook.com", "port": 587},
-}
-
-# Fallback configurations if primary port fails
-SMTP_FALLBACKS = {
-    "gmail": [
-        {"host": "smtp.gmail.com", "port": 587},   # STARTTLS
-        {"host": "smtp.gmail.com", "port": 25},    # Last resort
-    ],
-    "yahoo": [
-        {"host": "smtp.mail.yahoo.com", "port": 587},
-        {"host": "smtp.mail.yahoo.com", "port": 25},
-    ],
-    "outlook": [
-        {"host": "smtp-mail.outlook.com", "port": 465},
-        {"host": "smtp-mail.outlook.com", "port": 25},
-    ],
+    "gmail": {"host": "smtp.gmail.com", "port": 587, "use_tls": False, "starttls": True},
+    "yahoo": {"host": "smtp.mail.yahoo.com", "port": 465, "use_tls": True, "starttls": False},
+    "outlook": {"host": "smtp-mail.outlook.com", "port": 587, "use_tls": False, "starttls": True},
 }
 
 IMAP_CONFIGS = {
@@ -68,29 +52,13 @@ async def send_email(
     level: int,
     sender_sae_id: str,
 ) -> dict:
-    """Send an email with encrypted body and QKD headers.
-    
-    Tries primary SMTP port, falls back to alternatives if timeout occurs.
-    """
-    provider = detect_provider(sender)
-    configs_to_try = [SMTP_CONFIGS[provider]] + SMTP_FALLBACKS.get(provider, [])
-    
-    for attempt, cfg in enumerate(configs_to_try, 1):
-        print(f"ATTEMPT {attempt}/{len(configs_to_try)}: {cfg['host']}:{cfg['port']}")
-        result = await _send_smtp(sender, password, recipient, subject, 
-                                  encrypted_body, key_id, level, sender_sae_id, cfg)
-        if result["success"]:
-            return result
-        print(f"  Failed: {result['error']}")
-    
-    return {"success": False, "error": f"All SMTP attempts failed"}
-
-
-async def _send_smtp(sender: str, password: str, recipient: str, subject: str,
-                     encrypted_body: str, key_id: Optional[str], level: int,
-                     sender_sae_id: str, cfg: dict) -> dict:
-    """Attempt to send via specific SMTP config."""
+    """Send an email with encrypted body and QKD headers."""
     try:
+        provider = detect_provider(sender)
+        cfg = SMTP_CONFIGS[provider]
+        
+        print(f"Sending via {provider}: {cfg['host']}:{cfg['port']}")
+        
         msg = MIMEMultipart()
         msg["From"] = sender
         msg["To"] = recipient
@@ -104,46 +72,41 @@ async def _send_smtp(sender: str, password: str, recipient: str, subject: str,
 
         msg.attach(MIMEText(encrypted_body, "plain"))
 
-        # Explicit SSL/TLS context
-        tls_context = ssl.create_default_context()
-        use_implicit_tls = (cfg["port"] == 465)
-        
-        print(f"  Creating SMTP client (use_tls={use_implicit_tls})...")
-        
-        # Create SMTP client with 30s timeout
+        print(f"Creating SMTP client (use_tls={cfg['use_tls']}, timeout=60s)...")
         client = aiosmtplib.SMTP(
             hostname=cfg["host"],
             port=cfg["port"],
-            use_tls=use_implicit_tls,
-            timeout=30,
-            tls_context=tls_context
+            use_tls=cfg["use_tls"],
+            timeout=60
         )
         
-        print(f"  Connecting...")
-        await client.connect()
-        print(f"  Connected ✓")
+        print(f"Connecting to {cfg['host']}:{cfg['port']}...")
+        await asyncio.wait_for(client.connect(), timeout=65)
+        print(f"Connected ✓")
         
-        # STARTTLS for port 587
-        if not use_implicit_tls:
-            print(f"  Starting TLS...")
-            await client.starttls(tls_context)
-            print(f"  TLS started ✓")
+        # Handle STARTTLS for port 587
+        if cfg.get("starttls"):
+            print(f"Starting TLS...")
+            await asyncio.wait_for(client.starttls(), timeout=65)
+            print(f"TLS started ✓")
         
-        print(f"  Logging in...")
-        await client.login(sender, password)
-        print(f"  Logged in ✓")
+        print(f"Authenticating as {sender}...")
+        await asyncio.wait_for(client.login(sender, password), timeout=65)
+        print(f"Authenticated ✓")
         
-        print(f"  Sending...")
-        await client.send_message(msg)
-        print(f"  Sent ✓")
+        print(f"Sending message...")
+        await asyncio.wait_for(client.send_message(msg), timeout=65)
+        print(f"Sent ✓")
         
         await client.quit()
         return {"success": True}
         
-    except asyncio.TimeoutError as e:
-        return {"success": False, "error": f"Timeout: {cfg['host']}:{cfg['port']}"}
+    except asyncio.TimeoutError:
+        return {"success": False, "error": "SMTP connection timeout"}
     except Exception as e:
-        return {"success": False, "error": f"{type(e).__name__}: {str(e)}"}
+        error_str = f"{type(e).__name__}: {str(e)[:100]}"
+        print(f"SMTP error: {error_str}")
+        return {"success": False, "error": error_str}
 
 
 async def fetch_emails(email_addr: str, password: str, folder: str = "INBOX", limit: int = 20) -> list:
